@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 mod account_manager;
 mod account_metadata;
+mod account_proxy_settings;
 mod account_subscriptions;
 mod accounts;
 mod aggregate_apis;
@@ -56,6 +57,19 @@ pub struct AccountSubscription {
     pub plan_type: Option<String>,
     pub expires_at: Option<i64>,
     pub renews_at: Option<i64>,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct AccountProxySettings {
+    pub account_id: String,
+    pub enabled: bool,
+    pub proxy_url: Option<String>,
+    pub status: String,
+    pub latency_ms: Option<i64>,
+    pub last_check_at: Option<i64>,
+    pub last_error: Option<String>,
+    pub created_at: i64,
     pub updated_at: i64,
 }
 
@@ -1044,6 +1058,11 @@ impl Storage {
             include_str!("../../migrations/068_request_logs_route_strategy_source.sql"),
             |s| s.ensure_request_log_route_strategy_columns(),
         )?;
+        self.apply_sql_or_compat_migration(
+            "069_account_proxy_settings",
+            include_str!("../../migrations/069_account_proxy_settings.sql"),
+            |s| s.ensure_account_proxy_settings_table(),
+        )?;
         self.ensure_api_key_rotation_columns()?;
         self.ensure_aggregate_apis_table()?;
         self.ensure_aggregate_api_supplier_model_tables()?;
@@ -1061,6 +1080,7 @@ impl Storage {
         self.ensure_request_log_route_detail_columns()?;
         self.ensure_model_catalog_models_table()?;
         self.ensure_account_subscriptions_table()?;
+        self.ensure_account_proxy_settings_table()?;
         self.ensure_quota_pool_tables()?;
         self.ensure_account_manager_tables()?;
         self.ensure_model_source_tables()?;

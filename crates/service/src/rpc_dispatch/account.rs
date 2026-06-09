@@ -2,7 +2,8 @@ use codexmanager_core::rpc::types::{JsonRpcRequest, JsonRpcResponse};
 
 use crate::{
     account_cleanup, account_delete, account_delete_many, account_export, account_import,
-    account_list, account_update, account_warmup, auth_account, auth_login, auth_tokens,
+    account_list, account_proxy, account_update, account_warmup, auth_account, auth_login,
+    auth_tokens,
 };
 
 /// 函数 `try_handle`
@@ -104,6 +105,26 @@ pub(super) fn try_handle(req: &JsonRpcRequest) -> Option<JsonRpcResponse> {
                 .unwrap_or_default();
             let message = first_string_param(req, &["message"]).unwrap_or_default();
             super::value_or_error(account_warmup::warmup_accounts(account_ids, &message))
+        }
+        "account/proxy/get" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            super::value_or_error(account_proxy::get_account_proxy_settings(account_id))
+        }
+        "account/proxy/set" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            let enabled = super::bool_param(req, "enabled").unwrap_or(false);
+            let proxy_url = first_str_param(req, &["proxyUrl", "proxy_url"]);
+            super::value_or_error(account_proxy::set_account_proxy_settings(
+                account_id, enabled, proxy_url,
+            ))
+        }
+        "account/proxy/clear" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            super::value_or_error(account_proxy::clear_account_proxy_settings(account_id))
+        }
+        "account/proxy/test" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            super::value_or_error(account_proxy::test_account_proxy_settings(account_id))
         }
         "account/import" => {
             let mut contents = req
