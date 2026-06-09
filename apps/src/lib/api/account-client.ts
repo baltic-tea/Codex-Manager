@@ -80,6 +80,22 @@ export interface AccountWarmupPayload {
   message?: string;
 }
 
+export interface AccountProxySettings {
+  accountId: string;
+  enabled: boolean;
+  proxyUrl: string;
+  status: string;
+  latencyMs: number | null;
+  lastCheckAt: number | null;
+  lastError: string | null;
+}
+
+export interface AccountProxySetPayload {
+  accountId: string;
+  enabled: boolean;
+  proxyUrl?: string | null;
+}
+
 export interface AccountDeleteByStatusesPayload {
   statuses: string[];
 }
@@ -340,6 +356,38 @@ function mergeImportResult(
   }
 }
 
+function readAccountProxySettings(payload: unknown): AccountProxySettings {
+  const source =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const readNumber = (value: unknown): number | null => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+  const readString = (value: unknown): string =>
+    typeof value === "string" ? value : value == null ? "" : String(value);
+
+  return {
+    accountId: readString(source.accountId ?? source.account_id),
+    enabled: Boolean(source.enabled),
+    proxyUrl: readString(source.proxyUrl ?? source.proxy_url),
+    status: readString(source.status || "not_configured"),
+    latencyMs: readNumber(source.latencyMs ?? source.latency_ms),
+    lastCheckAt: readNumber(source.lastCheckAt ?? source.last_check_at),
+    lastError:
+      source.lastError == null && source.last_error == null
+        ? null
+        : readString(source.lastError ?? source.last_error),
+  };
+}
+
 /**
  * 函数 `importAccountContents`
  *
@@ -488,6 +536,31 @@ export const accountClient = {
           message: params?.message || "hi",
         }),
       ),
+    ),
+  getProxySettings: async (accountId: string): Promise<AccountProxySettings> =>
+    readAccountProxySettings(
+      await invoke<unknown>("service_account_proxy_get", withAddr({ accountId })),
+    ),
+  setProxySettings: async (
+    params: AccountProxySetPayload,
+  ): Promise<AccountProxySettings> =>
+    readAccountProxySettings(
+      await invoke<unknown>(
+        "service_account_proxy_set",
+        withAddr({
+          accountId: params.accountId,
+          enabled: params.enabled,
+          proxyUrl: params.proxyUrl ?? null,
+        }),
+      ),
+    ),
+  clearProxySettings: async (accountId: string): Promise<AccountProxySettings> =>
+    readAccountProxySettings(
+      await invoke<unknown>("service_account_proxy_clear", withAddr({ accountId })),
+    ),
+  testProxySettings: async (accountId: string): Promise<AccountProxySettings> =>
+    readAccountProxySettings(
+      await invoke<unknown>("service_account_proxy_test", withAddr({ accountId })),
     ),
 
   async getUsage(accountId: string): Promise<AccountUsage | null> {

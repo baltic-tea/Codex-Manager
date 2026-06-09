@@ -25,12 +25,36 @@ export const EN_ACCOUNTS_MESSAGES: MessageCatalog = {
     "Only used for quota pool ownership statistics. Leave blank to make this account effective for all API-available models.",
   "代理地区不受支持，已暂停账号刷新":
     "The proxy region is not supported. Account refresh has been paused.",
+  "保存账号代理": "Save account proxy",
+  "保存账号代理失败": "Failed to save account proxy",
+  "测试账号代理": "Test account proxy",
+  "测试账号代理失败": "Failed to test account proxy",
+  "测试中": "Testing",
+  "未测试": "Untested",
+  "测试失败": "Test failed",
+  "测试状态": "Test status",
+  "从未检查": "Never checked",
+  "代理地址": "Proxy URL",
+  "地址无效": "Invalid URL",
   "刷新 AT/RT": "Refresh AT/RT",
   "刷新 AT/RT 失败": "Failed to refresh AT/RT",
   "刷新全部 AT/RT": "Refresh all AT/RT",
   "刷新用量": "Refresh usage",
   "刷新登录凭证返回 401，需要重新登录":
     "Refreshing login credentials returned 401. Log in again.",
+  "读取账号代理": "Read account proxy",
+  "读取账号代理失败": "Failed to read account proxy",
+  "服务未连接，暂时无法读取账号代理":
+    "Service is not connected, account proxy cannot be read yet",
+  "默认路由": "Default route",
+  "启用后，该账号会优先使用这里的代理地址。":
+    "When enabled, this account uses this proxy URL before other routing.",
+  "启用账号代理": "Enable account proxy",
+  "清除账号代理": "Clear account proxy",
+  "清除账号代理失败": "Failed to clear account proxy",
+  "为单个 OpenAI 账号配置本地代理。":
+    "Configure a local proxy for one OpenAI account.",
+  "延迟": "Latency",
   "原因码": "Reason code",
   "容量覆盖": "Capacity override",
   "当前没有匹配所选状态的账号": "No accounts match the selected statuses",
@@ -62,6 +86,12 @@ export const EN_ACCOUNTS_MESSAGES: MessageCatalog = {
   "确认清理": "Confirm cleanup",
   "缺少授权 Token": "Missing auth token",
   "账号 AT/RT 已刷新": "Account AT/RT refreshed",
+  "账号代理": "Account proxy",
+  "账号代理测试通过": "Account proxy test passed",
+  "账号代理测试未通过": "Account proxy test did not pass",
+  "账号代理已保存": "Account proxy saved",
+  "账号代理已关闭": "Account proxy disabled",
+  "账号代理已清除": "Account proxy cleared",
   "账号已停用": "Account deactivated",
   "账号或工作区被停用的账号": "Accounts or workspaces that were deactivated",
   "状态字段为 unknown 的账号": "Accounts whose status field is unknown",
@@ -73,6 +103,9 @@ export const EN_ACCOUNTS_MESSAGES: MessageCatalog = {
     "Choose an export mode. If accounts are selected, only the selected items will be exported.",
   "选择要删除的账号状态；删除后不可恢复。":
     "Choose the account statuses to delete. Deletion cannot be undone.",
+  "支持 http、https、socks5、socks5h；sing-box mixed inbound 通常填写 http://127.0.0.1:端口。":
+    "Supports http, https, socks5, and socks5h. For sing-box mixed inbound, usually enter http://127.0.0.1:port.",
+  "最近检查": "Last check",
   "这里展示账号套餐接口同步回来的套餐状态与时间信息。":
     "This shows plan status and time information synced from the account plan API.",
   "额度容量必须是大于 0 的数字，留空表示未覆盖":

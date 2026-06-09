@@ -15,6 +15,18 @@ import { RU_PLATFORM_MODE_MESSAGES } from "./sections/ru-platform-mode";
 import { RU_RUNTIME_UI_MESSAGES } from "./sections/ru-runtime-ui";
 
 export const RU_MESSAGES: MessageCatalog = {
+	...RU_ACCESS_CONTROL_MESSAGES,
+	...RU_ACCOUNT_MANAGER_MESSAGES,
+	...RU_ACCOUNTS_MESSAGES,
+	...RU_API_KEYS_MESSAGES,
+	...RU_AGGREGATE_API_MESSAGES,
+	...RU_DASHBOARD_MESSAGES,
+	...RU_DYNAMIC_UI_MESSAGES,
+	...RU_MODEL_CATALOG_MESSAGES,
+	...RU_MODEL_GROUPS_MESSAGES,
+	...RU_MODELS_MESSAGES,
+	...RU_PLATFORM_MODE_MESSAGES,
+	...RU_RUNTIME_UI_MESSAGES,
 	仪表盘: "Обзор",
 	概览: "Обзор",
 	资源接入: "Ресурсы",
@@ -2090,5 +2102,4 @@ export const RU_MESSAGES: MessageCatalog = {
 	仅网关流量: "Только трафик шлюза",
 	"账号直连模式下不会产生请求日志，如需记录请求请切换到本地网关模式。":
 		"В режиме прямого аккаунта журналы запросов не создаются; если нужен журнал, переключитесь на режим локального шлюза.",
-	...RU_PLATFORM_MODE_MESSAGES,
 };

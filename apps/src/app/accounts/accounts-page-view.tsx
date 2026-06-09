@@ -12,6 +12,7 @@ import {
   KeyRound,
   Loader2,
   MoreVertical,
+  Network,
   PencilLine,
   Pin,
   Plus,
@@ -56,6 +57,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -73,6 +75,7 @@ import {
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 import { formatCompactNumber } from "@/lib/utils/usage";
+import type { AccountProxySettings } from "@/lib/api/account-client";
 import type { Account } from "@/types";
 import {
   type AccountEditorState,
@@ -135,6 +138,11 @@ export interface AccountsPageViewProps {
   cleanupDialogOpen: boolean;
   cleanupStatusDraft: string[];
   cleanupStatusOptions: CleanupStatusOption[];
+  proxyDialogAccount: Account | null;
+  proxySettings: AccountProxySettings | null;
+  isProxySettingsLoading: boolean;
+  proxyEnabledDraft: boolean;
+  proxyUrlDraft: string;
   selectedAccount: Account | null;
   accountEditorState: AccountEditorState | null;
   deleteDialogState: DeleteDialogState;
@@ -155,6 +163,9 @@ export interface AccountsPageViewProps {
   isDeletingMany: boolean;
   isCleaningAccountsByStatus: boolean;
   isUpdatingPreferred: boolean;
+  isSavingAccountProxy: boolean;
+  isClearingAccountProxy: boolean;
+  isTestingAccountProxy: boolean;
   isReorderingAccounts: boolean;
   isUpdatingProfileAccountId: string | null;
   isUpdatingStatusAccountId: string | null;
@@ -168,6 +179,8 @@ export interface AccountsPageViewProps {
   setExportModeDraft: Dispatch<SetStateAction<AccountExportMode>>;
   setDeleteDialogState: Dispatch<SetStateAction<DeleteDialogState>>;
   setCleanupDialogOpen: Dispatch<SetStateAction<boolean>>;
+  setProxyEnabledDraft: Dispatch<SetStateAction<boolean>>;
+  setProxyUrlDraft: Dispatch<SetStateAction<string>>;
   setAccountEditorState: Dispatch<SetStateAction<AccountEditorState | null>>;
   setLabelDraft: Dispatch<SetStateAction<string>>;
   setTagsDraft: Dispatch<SetStateAction<string>>;
@@ -193,6 +206,11 @@ export interface AccountsPageViewProps {
   openExportDialog: () => void;
   handleConfirmExport: () => Promise<void>;
   handleDeleteSingle: (account: Account) => void;
+  openProxyDialog: (account: Account) => void;
+  handleProxyDialogOpenChange: (open: boolean) => void;
+  handleSaveProxySettings: () => Promise<void>;
+  handleClearProxySettings: () => Promise<void>;
+  handleTestProxySettings: () => Promise<void>;
   openAccountEditor: (account: Account) => void;
   handleMoveAccount: (
     account: Account,
@@ -244,6 +262,11 @@ export function AccountsPageView(props: AccountsPageViewProps) {
     cleanupDialogOpen,
     cleanupStatusDraft,
     cleanupStatusOptions,
+    proxyDialogAccount,
+    proxySettings,
+    isProxySettingsLoading,
+    proxyEnabledDraft,
+    proxyUrlDraft,
     selectedAccount,
     accountEditorState,
     deleteDialogState,
@@ -264,6 +287,9 @@ export function AccountsPageView(props: AccountsPageViewProps) {
     isDeletingMany,
     isCleaningAccountsByStatus,
     isUpdatingPreferred,
+    isSavingAccountProxy,
+    isClearingAccountProxy,
+    isTestingAccountProxy,
     isReorderingAccounts,
     isUpdatingProfileAccountId,
     isUpdatingStatusAccountId,
@@ -277,6 +303,8 @@ export function AccountsPageView(props: AccountsPageViewProps) {
     setExportModeDraft,
     setDeleteDialogState,
     setCleanupDialogOpen,
+    setProxyEnabledDraft,
+    setProxyUrlDraft,
     setAccountEditorState,
     setLabelDraft,
     setTagsDraft,
@@ -302,6 +330,11 @@ export function AccountsPageView(props: AccountsPageViewProps) {
     openExportDialog,
     handleConfirmExport,
     handleDeleteSingle,
+    openProxyDialog,
+    handleProxyDialogOpenChange,
+    handleSaveProxySettings,
+    handleClearProxySettings,
+    handleTestProxySettings,
     openAccountEditor,
     handleMoveAccount,
     handleApplyAccountSizeSort,
@@ -323,6 +356,33 @@ export function AccountsPageView(props: AccountsPageViewProps) {
       cleanupStatusDraft.includes(option.id) ? total + option.count : total,
     0,
   );
+  const accountProxyBusy =
+    isProxySettingsLoading ||
+    isSavingAccountProxy ||
+    isClearingAccountProxy ||
+    isTestingAccountProxy;
+  const accountProxyStatusText = (() => {
+    const status = String(proxySettings?.status || "not_configured");
+    switch (status) {
+      case "ok":
+        return t("可用");
+      case "failed":
+        return t("测试失败");
+      case "invalid_url":
+        return t("地址无效");
+      case "checking":
+        return t("测试中");
+      case "unchecked":
+        return t("未测试");
+      case "not_configured":
+      default:
+        return t("未配置");
+    }
+  })();
+  const accountProxyLastCheckText =
+    proxySettings?.lastCheckAt != null
+      ? new Date(proxySettings.lastCheckAt * 1000).toLocaleString()
+      : t("从未检查");
 
   return (
     <div className="space-y-6">
@@ -1042,6 +1102,14 @@ export function AccountsPageView(props: AccountsPageViewProps) {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="gap-2"
+                                disabled={!isServiceReady}
+                                onClick={() => void openProxyDialog(account)}
+                              >
+                                <Network className="h-4 w-4" />
+                                {t("账号代理")}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2"
                                 disabled={
                                   !isServiceReady ||
                                   isUpdatingStatusAccountId === account.id ||
@@ -1158,6 +1226,118 @@ export function AccountsPageView(props: AccountsPageViewProps) {
           !!selectedAccount && isRefreshingRtAccountId === selectedAccount.id
         }
       />
+      <Dialog
+        open={isPageActive && Boolean(proxyDialogAccount)}
+        onOpenChange={handleProxyDialogOpenChange}
+      >
+        <DialogContent className="glass-card p-0 sm:max-w-[560px]">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle>{t("账号代理")}</DialogTitle>
+            <DialogDescription>
+              {proxyDialogAccount
+                ? `${proxyDialogAccount.name} · ${proxyDialogAccount.id}`
+                : t("为单个 OpenAI 账号配置本地代理。")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 px-6 py-4">
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 px-3 py-3">
+              <div className="min-w-0">
+                <Label htmlFor="account-proxy-enabled" className="text-sm">
+                  {t("启用账号代理")}
+                </Label>
+                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                  {t("启用后，该账号会优先使用这里的代理地址。")}
+                </p>
+              </div>
+              <Switch
+                id="account-proxy-enabled"
+                checked={proxyEnabledDraft}
+                disabled={accountProxyBusy}
+                onCheckedChange={(value) => setProxyEnabledDraft(Boolean(value))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="account-proxy-url">{t("代理地址")}</Label>
+              <Input
+                id="account-proxy-url"
+                value={proxyUrlDraft}
+                disabled={accountProxyBusy}
+                onChange={(event) => setProxyUrlDraft(event.target.value)}
+                placeholder="http://127.0.0.1:7891"
+              />
+              <p className="text-[11px] leading-4 text-muted-foreground">
+                {t("支持 http、https、socks5、socks5h；sing-box mixed inbound 通常填写 http://127.0.0.1:端口。")}
+              </p>
+            </div>
+            <div className="grid gap-2 rounded-xl bg-muted/20 px-3 py-3 text-xs sm:grid-cols-2">
+              <div>
+                <div className="text-muted-foreground">{t("测试状态")}</div>
+                <div className="mt-1 font-medium">{accountProxyStatusText}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">{t("最近检查")}</div>
+                <div className="mt-1 font-medium">{accountProxyLastCheckText}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">{t("延迟")}</div>
+                <div className="mt-1 font-medium">
+                  {proxySettings?.latencyMs != null
+                    ? `${proxySettings.latencyMs} ms`
+                    : "--"}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">{t("当前模式")}</div>
+                <div className="mt-1 font-medium">
+                  {proxySettings?.enabled ? t("账号代理") : t("默认路由")}
+                </div>
+              </div>
+              {proxySettings?.lastError ? (
+                <div className="sm:col-span-2">
+                  <div className="text-muted-foreground">{t("错误")}</div>
+                  <div className="mt-1 break-words rounded-lg bg-background/60 px-2 py-1 font-mono text-[11px] text-destructive [overflow-wrap:anywhere]">
+                    {proxySettings.lastError}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <DialogFooter className="mx-0 mb-0 gap-2 rounded-b-xl border-t bg-muted/40 px-6 py-4 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={accountProxyBusy || !proxySettings}
+              onClick={() => void handleClearProxySettings()}
+            >
+              {isClearingAccountProxy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              {t("清除")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={accountProxyBusy || !proxySettings}
+              onClick={() => void handleTestProxySettings()}
+            >
+              {isTestingAccountProxy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              {t("测试")}
+            </Button>
+            <Button
+              type="button"
+              disabled={accountProxyBusy}
+              onClick={() => void handleSaveProxySettings()}
+            >
+              {isSavingAccountProxy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              {t("保存")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog
         open={isPageActive && Boolean(deleteDialogState)}
         onOpenChange={(open) => {
