@@ -420,6 +420,24 @@ fn upstream_client_for_account_fails_closed_for_invalid_explicit_proxy() {
 }
 
 #[test]
+fn upstream_client_for_account_fails_closed_for_enabled_proxy_without_url() {
+    let _guard = crate::test_env_guard();
+    let db = TestDbGuard::new("runtime-account-proxy-empty");
+    seed_account(db.path(), "acc-empty");
+    seed_account_proxy(db.path(), "acc-empty", true, None);
+    let _global_guard = EnvGuard::set(ENV_UPSTREAM_PROXY_URL, "http://127.0.0.1:7002");
+    let _pool_guard = EnvGuard::set(ENV_PROXY_LIST, "http://127.0.0.1:7003");
+
+    reload_from_env();
+
+    let err =
+        upstream_client_for_account("acc-empty").expect_err("fail closed for missing proxy URL");
+    assert!(err.contains("fail-closed"));
+    assert!(err.contains("acc-empty"));
+    assert!(err.contains("missing proxy URL"));
+}
+
+#[test]
 fn account_proxy_set_and_clear_invalidate_gateway_cache() {
     let _guard = crate::test_env_guard();
     let db = TestDbGuard::new("runtime-account-proxy-cache");

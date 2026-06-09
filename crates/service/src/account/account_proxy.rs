@@ -7,7 +7,32 @@ pub(crate) const STATUS_NOT_CONFIGURED: &str = "not_configured";
 pub(crate) const STATUS_UNCHECKED: &str = "unchecked";
 pub(crate) const STATUS_CHECKING: &str = "checking";
 pub(crate) const STATUS_INVALID_URL: &str = "invalid_url";
+pub(crate) const ENV_ACCOUNT_PROXY_DEBUG: &str = "CODEXMANAGER_ACCOUNT_PROXY_DEBUG";
+#[cfg(test)]
+pub(crate) const STATUS_RUNTIME_ERROR: &str = "runtime_error";
 const LOCAL_PROXY_EXPECTED_MESSAGE: &str = "Codex-Manager expects a local HTTP/SOCKS proxy URL. Start sing-box separately and paste the local mixed inbound address, for example http://127.0.0.1:7891.";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AccountProxyMode {
+    Disabled,
+    Explicit {
+        proxy_url: String,
+    },
+    Invalid {
+        proxy_url: Option<String>,
+        error: String,
+    },
+}
+
+impl AccountProxyMode {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Explicit { .. } => "explicit",
+            Self::Invalid { .. } => "invalid",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -84,6 +109,47 @@ pub(crate) fn test_account_proxy_settings(
     })
 }
 
+pub(crate) fn resolve_account_proxy_mode(account_id: &str) -> AccountProxyMode {
+    let normalized_account_id = account_id.trim();
+    if normalized_account_id.is_empty() {
+        return AccountProxyMode::Disabled;
+    }
+
+    let Some(storage) = open_storage() else {
+        return AccountProxyMode::Disabled;
+    };
+    resolve_account_proxy_mode_from_storage(&storage, normalized_account_id)
+}
+
+pub(crate) fn account_proxy_debug_enabled() -> bool {
+    std::env::var(ENV_ACCOUNT_PROXY_DEBUG)
+        .ok()
+        .map(|value| {
+            let normalized = value.trim();
+            normalized == "1"
+                || normalized.eq_ignore_ascii_case("true")
+                || normalized.eq_ignore_ascii_case("yes")
+                || normalized.eq_ignore_ascii_case("on")
+        })
+        .unwrap_or(false)
+}
+
+pub(crate) fn redact_proxy_url_for_log(proxy_url: &str) -> String {
+    let trimmed = proxy_url.trim();
+    if trimmed.is_empty() {
+        return "-".to_string();
+    }
+    let Ok(parsed) = url::Url::parse(trimmed) else {
+        return "<invalid>".to_string();
+    };
+    let scheme = parsed.scheme();
+    let host = parsed.host_str().unwrap_or("-");
+    match parsed.port_or_known_default() {
+        Some(port) => format!("{scheme}://{host}:{port}"),
+        None => format!("{scheme}://{host}"),
+    }
+}
+
 fn open_storage_for_account(account_id: &str) -> Result<StorageHandle, String> {
     normalize_account_id(account_id)?;
     open_storage().ok_or_else(|| "storage unavailable".to_string())
@@ -95,6 +161,56 @@ fn normalize_account_id(account_id: &str) -> Result<&str, String> {
         Err("missing accountId".to_string())
     } else {
         Ok(trimmed)
+    }
+}
+
+fn resolve_account_proxy_mode_from_storage(
+    storage: &Storage,
+    account_id: &str,
+) -> AccountProxyMode {
+    let settings = match storage.find_account_proxy_settings(account_id) {
+        Ok(settings) => settings,
+        Err(err) => {
+            log::warn!(
+                "event=account_proxy_mode_read_failed account_id={} err={}",
+                account_id,
+                err
+            );
+            return AccountProxyMode::Disabled;
+        }
+    };
+    let Some(settings) = settings else {
+        return AccountProxyMode::Disabled;
+    };
+    if !settings.enabled {
+        return AccountProxyMode::Disabled;
+    }
+
+    let trimmed_proxy_url = settings
+        .proxy_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    let Some(proxy_url) = trimmed_proxy_url else {
+        return AccountProxyMode::Invalid {
+            proxy_url: None,
+            error: format!(
+                "account explicit proxy for {} is invalid and fail-closed: missing proxy URL",
+                account_id
+            ),
+        };
+    };
+
+    match normalize_supported_proxy_url(proxy_url.as_str()) {
+        Ok(proxy_url) => AccountProxyMode::Explicit { proxy_url },
+        Err(err) => AccountProxyMode::Invalid {
+            proxy_url: Some(proxy_url.clone()),
+            error: format!(
+                "account explicit proxy for {} is invalid and fail-closed: {}. {}",
+                account_id, proxy_url, err
+            ),
+        },
     }
 }
 
@@ -262,8 +378,9 @@ fn account_proxy_settings_response(settings: AccountProxySettings) -> AccountPro
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_supported_proxy_url, test_account_proxy_settings_with_checker,
-        AccountProxySettingsResponse, STATUS_CHECKING, STATUS_INVALID_URL, STATUS_NOT_CONFIGURED,
+        normalize_supported_proxy_url, resolve_account_proxy_mode_from_storage,
+        test_account_proxy_settings_with_checker, AccountProxyMode, AccountProxySettingsResponse,
+        STATUS_CHECKING, STATUS_INVALID_URL, STATUS_NOT_CONFIGURED, STATUS_RUNTIME_ERROR,
         STATUS_UNCHECKED,
     };
     use codexmanager_core::storage::{now_ts, Account, Storage};
@@ -322,6 +439,54 @@ mod tests {
         assert_eq!(stored.status, STATUS_NOT_CONFIGURED);
         assert_eq!(stored.latency_ms, None);
         assert_eq!(stored.last_error, None);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn resolve_account_proxy_mode_treats_disabled_proxy_with_stored_url_as_disabled() {
+        let dir = new_test_dir("account-proxy-mode-disabled");
+        let storage = seed_storage(&dir, "acc-disabled-mode");
+        storage
+            .upsert_account_proxy_settings(
+                "acc-disabled-mode",
+                false,
+                Some("http://127.0.0.1:7891"),
+                STATUS_UNCHECKED,
+                None,
+                None,
+                None,
+            )
+            .expect("seed disabled mode proxy settings");
+
+        let mode = resolve_account_proxy_mode_from_storage(&storage, "acc-disabled-mode");
+        assert_eq!(mode, AccountProxyMode::Disabled);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn resolve_account_proxy_mode_fails_closed_for_enabled_proxy_without_url() {
+        let dir = new_test_dir("account-proxy-mode-empty");
+        let storage = seed_storage(&dir, "acc-empty-mode");
+        storage
+            .upsert_account_proxy_settings(
+                "acc-empty-mode",
+                true,
+                None,
+                STATUS_UNCHECKED,
+                None,
+                None,
+                None,
+            )
+            .expect("seed empty mode proxy settings");
+
+        let mode = resolve_account_proxy_mode_from_storage(&storage, "acc-empty-mode");
+        let AccountProxyMode::Invalid { proxy_url, error } = mode else {
+            panic!("enabled proxy without URL must fail closed");
+        };
+        assert_eq!(proxy_url, None);
+        assert!(error.contains("fail-closed"));
 
         let _ = fs::remove_dir_all(dir);
     }
@@ -419,6 +584,52 @@ mod tests {
         assert_eq!(stored.status, STATUS_FAILED);
         assert_eq!(stored.latency_ms, None);
         assert_eq!(stored.last_error.as_deref(), Some("proxy unreachable"));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_account_proxy_settings_persists_runtime_error_status() {
+        let dir = new_test_dir("account-proxy-runtime-error");
+        let storage = seed_storage(&dir, "acc-runtime");
+        storage
+            .upsert_account_proxy_settings(
+                "acc-runtime",
+                true,
+                Some("http://127.0.0.1:7891"),
+                STATUS_UNCHECKED,
+                None,
+                None,
+                None,
+            )
+            .expect("seed runtime proxy settings");
+
+        let response = test_account_proxy_settings_with_checker(&storage, "acc-runtime", |_| {
+            crate::account::proxy_health::ProxyHealthCheckResult {
+                status: STATUS_RUNTIME_ERROR,
+                latency_ms: None,
+                last_error: Some("local proxy runtime unavailable".to_string()),
+            }
+        })
+        .expect("test runtime proxy");
+
+        assert_status(&response, STATUS_RUNTIME_ERROR);
+        assert_eq!(response.latency_ms, None);
+        assert_eq!(
+            response.last_error.as_deref(),
+            Some("local proxy runtime unavailable")
+        );
+
+        let stored = storage
+            .find_account_proxy_settings("acc-runtime")
+            .expect("find stored runtime proxy")
+            .expect("stored runtime proxy");
+        assert_eq!(stored.status, STATUS_RUNTIME_ERROR);
+        assert_eq!(stored.latency_ms, None);
+        assert_eq!(
+            stored.last_error.as_deref(),
+            Some("local proxy runtime unavailable")
+        );
 
         let _ = fs::remove_dir_all(dir);
     }

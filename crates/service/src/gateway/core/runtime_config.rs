@@ -326,24 +326,6 @@ fn build_async_upstream_client() -> reqwest::Client {
     build_async_upstream_client_with_proxy(proxy_url.as_deref())
 }
 
-pub(crate) fn apply_blocking_upstream_proxy(
-    mut builder: reqwest::blocking::ClientBuilder,
-    proxy_url: Option<&str>,
-    invalid_event: &str,
-) -> reqwest::blocking::ClientBuilder {
-    if let Some(proxy_url) = proxy_url.map(str::trim).filter(|value| !value.is_empty()) {
-        match Proxy::all(proxy_url) {
-            Ok(proxy) => {
-                builder = builder.proxy(proxy);
-            }
-            Err(err) => {
-                log::warn!("event={} proxy={} err={}", invalid_event, proxy_url, err);
-            }
-        }
-    }
-    builder
-}
-
 pub(crate) fn apply_async_upstream_proxy(
     mut builder: reqwest::ClientBuilder,
     proxy_url: Option<&str>,
@@ -1802,6 +1784,9 @@ fn load_account_proxy_client_cache_entry_from_storage(
     let Some(settings) = settings else {
         return AccountProxyClientCacheEntry::NotConfigured;
     };
+    if !settings.enabled {
+        return AccountProxyClientCacheEntry::NotConfigured;
+    }
     let Some(proxy_url) = settings
         .proxy_url
         .as_deref()
@@ -1809,11 +1794,11 @@ fn load_account_proxy_client_cache_entry_from_storage(
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
     else {
-        return AccountProxyClientCacheEntry::NotConfigured;
+        return AccountProxyClientCacheEntry::Invalid {
+            proxy_url: String::new(),
+            error: "missing proxy URL".to_string(),
+        };
     };
-    if !settings.enabled {
-        return AccountProxyClientCacheEntry::NotConfigured;
-    }
 
     let normalized_proxy_url = match normalize_upstream_proxy_url(Some(proxy_url.as_str())) {
         Ok(Some(proxy_url)) => proxy_url,

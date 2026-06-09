@@ -1,10 +1,12 @@
 use reqwest::blocking::Client;
 use reqwest::Proxy;
 use std::time::{Duration, Instant};
+use url::{Host, Url};
 
 const STATUS_FAILED: &str = "failed";
 const STATUS_INVALID_URL: &str = "invalid_url";
 const STATUS_OK: &str = "ok";
+const STATUS_RUNTIME_ERROR: &str = "runtime_error";
 const PROXY_TEST_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const PROXY_TEST_TOTAL_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_PROXY_TEST_TARGETS: &[&str] = &[
@@ -29,8 +31,9 @@ fn check_account_proxy_with_options(
     targets: &[&str],
     accept_invalid_certs: bool,
 ) -> ProxyHealthCheckResult {
-    let client = match build_proxy_test_client(proxy_url, accept_invalid_certs) {
-        Ok(client) => client,
+    let (client, parsed_proxy_url) = match build_proxy_test_client(proxy_url, accept_invalid_certs)
+    {
+        Ok(result) => result,
         Err(err) => {
             return ProxyHealthCheckResult {
                 status: STATUS_INVALID_URL,
@@ -62,6 +65,13 @@ fn check_account_proxy_with_options(
                 ));
             }
             Err(err) => {
+                if looks_like_local_proxy_runtime_error(&parsed_proxy_url, &err) {
+                    return ProxyHealthCheckResult {
+                        status: STATUS_RUNTIME_ERROR,
+                        latency_ms: None,
+                        last_error: Some(format!("local proxy runtime unavailable: {err}")),
+                    };
+                }
                 last_error = Some(format!("proxy test GET {target} failed: {err}"));
             }
         }
@@ -76,23 +86,55 @@ fn check_account_proxy_with_options(
     }
 }
 
-fn build_proxy_test_client(proxy_url: &str, accept_invalid_certs: bool) -> Result<Client, String> {
+fn build_proxy_test_client(
+    proxy_url: &str,
+    accept_invalid_certs: bool,
+) -> Result<(Client, Url), String> {
+    let parsed = Url::parse(proxy_url)
+        .map_err(|err| format!("invalid proxyUrl: {err}. Check the local HTTP/SOCKS proxy URL."))?;
     let proxy = Proxy::all(proxy_url)
         .map_err(|err| format!("invalid proxyUrl: {err}. Check the local HTTP/SOCKS proxy URL."))?;
-    Client::builder()
+    let client = Client::builder()
         .connect_timeout(PROXY_TEST_CONNECT_TIMEOUT)
         .timeout(PROXY_TEST_TOTAL_TIMEOUT)
         .danger_accept_invalid_certs(accept_invalid_certs)
         .user_agent(crate::gateway::current_codex_user_agent())
         .proxy(proxy)
         .build()
-        .map_err(|err| format!("build proxy test client failed: {err}"))
+        .map_err(|err| format!("build proxy test client failed: {err}"))?;
+    Ok((client, parsed))
+}
+
+fn looks_like_local_proxy_runtime_error(proxy_url: &Url, err: &reqwest::Error) -> bool {
+    if !is_loopback_proxy_url(proxy_url) {
+        return false;
+    }
+    if err.is_connect() || err.is_timeout() {
+        return true;
+    }
+    let message = err.to_string().to_ascii_lowercase();
+    message.contains("connection refused")
+        || message.contains("unsuccessful tunnel")
+        || message.contains("tcp connect error")
+        || message.contains("error trying to connect")
+        || message.contains("proxy connect")
+        || message.contains("channel closed")
+}
+
+fn is_loopback_proxy_url(proxy_url: &Url) -> bool {
+    match proxy_url.host() {
+        Some(Host::Ipv4(addr)) => addr.is_loopback(),
+        Some(Host::Ipv6(addr)) => addr.is_loopback(),
+        Some(Host::Domain(domain)) => domain.eq_ignore_ascii_case("localhost"),
+        None => false,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         check_account_proxy_with_options, ProxyHealthCheckResult, STATUS_FAILED, STATUS_OK,
+        STATUS_RUNTIME_ERROR,
     };
     use rcgen::generate_simple_self_signed;
     use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
@@ -151,6 +193,23 @@ mod tests {
 
         proxy_handle.join().expect("join proxy thread");
         https_handle.join().expect("join https thread");
+    }
+
+    #[test]
+    fn proxy_health_check_marks_loopback_connect_refused_as_runtime_error() {
+        let free_port = reserve_free_port();
+        let proxy_url = format!("http://127.0.0.1:{free_port}");
+
+        let result = check_account_proxy_with_options(
+            &proxy_url,
+            &["https://www.gstatic.com/generate_204"],
+            true,
+        );
+
+        assert_eq!(result.status, STATUS_RUNTIME_ERROR);
+        assert_eq!(result.latency_ms, None);
+        let error = result.last_error.as_deref().expect("last_error");
+        assert!(error.contains("local proxy runtime unavailable"));
     }
 
     fn assert_failed_with_error(result: &ProxyHealthCheckResult, expected_fragment: &str) {
@@ -267,5 +326,13 @@ mod tests {
             .next()
             .unwrap_or_default()
             .to_string()
+    }
+
+    fn reserve_free_port() -> u16 {
+        TcpListener::bind("127.0.0.1:0")
+            .expect("bind free port probe")
+            .local_addr()
+            .expect("free port addr")
+            .port()
     }
 }
