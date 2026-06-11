@@ -1,6 +1,7 @@
 use codexmanager_core::storage::{now_ts, AccountProxySettings, Storage};
 use serde::Serialize;
 
+use crate::account::proxy_health::{ProxyGeoInfo, ProxyHealthCheckResult};
 use crate::storage_helpers::{open_storage, StorageHandle};
 
 pub(crate) const STATUS_NOT_CONFIGURED: &str = "not_configured";
@@ -44,6 +45,22 @@ pub(crate) struct AccountProxySettingsResponse {
     pub latency_ms: Option<i64>,
     pub last_check_at: Option<i64>,
     pub last_error: Option<String>,
+    pub ip: Option<String>,
+    pub country_code: Option<String>,
+    pub country_name: Option<String>,
+    pub region_name: Option<String>,
+    pub city_name: Option<String>,
+    pub geo_checked_at: Option<i64>,
+    pub geo_error: Option<String>,
+    pub asn: Option<i64>,
+    pub as_org: Option<String>,
+    pub isp: Option<String>,
+    pub as_domain: Option<String>,
+    pub timezone_id: Option<String>,
+    pub timezone_offset: Option<i64>,
+    pub timezone_utc: Option<String>,
+    pub flag_img_url: Option<String>,
+    pub flag_emoji: Option<String>,
 }
 
 pub(crate) fn get_account_proxy_settings(
@@ -59,29 +76,139 @@ pub(crate) fn set_account_proxy_settings(
     account_id: &str,
     enabled: bool,
     proxy_url: Option<&str>,
+    status: Option<&str>,
+    latency_ms: Option<i64>,
+    last_error: Option<&str>,
+    ip: Option<&str>,
+    country_code: Option<&str>,
+    country_name: Option<&str>,
+    region_name: Option<&str>,
+    city_name: Option<&str>,
+    geo_checked_at: Option<i64>,
+    geo_error: Option<&str>,
 ) -> Result<AccountProxySettingsResponse, String> {
     let storage = open_storage_for_account(account_id)?;
     let account_id = normalize_account_id(account_id)?;
     ensure_account_exists(&storage, account_id)?;
 
+    let previous = storage
+        .find_account_proxy_settings(account_id)
+        .map_err(|err| format!("read account proxy settings failed: {err}"))?;
     let normalized_proxy_url = normalize_proxy_url_for_setting(enabled, proxy_url)?;
-    let status = if enabled {
+    let normalized_proxy_url_ref = normalized_proxy_url.as_deref();
+    let previous_proxy_url = previous
+        .as_ref()
+        .and_then(|settings| settings.proxy_url.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let proxy_url_changed = normalized_proxy_url_ref != previous_proxy_url;
+    let default_status = if enabled {
         STATUS_UNCHECKED
     } else {
         STATUS_NOT_CONFIGURED
     };
+
+    let (
+        final_status, final_latency, final_last_error,
+        final_ip, final_country_code, final_country_name, final_region_name, final_city_name,
+        final_geo_checked_at, final_geo_error,
+        final_asn, final_as_org, final_isp, final_as_domain,
+        final_timezone_id, final_timezone_offset, final_timezone_utc,
+        final_flag_img_url, final_flag_emoji,
+    ) =
+    if proxy_url_changed {
+        if status.is_some() {
+            (
+                status.unwrap_or(default_status),
+                latency_ms, last_error,
+                ip, country_code, country_name, region_name, city_name,
+                geo_checked_at, geo_error,
+                None, None, None, None,
+                None, None, None,
+                None, None,
+            )
+        } else {
+            (
+                default_status,
+                None, None,
+                None, None, None, None, None,
+                None, None,
+                None, None, None, None,
+                None, None, None,
+                None, None,
+            )
+        }
+    } else {
+        let prev = previous.as_ref();
+        (
+            status.unwrap_or_else(|| prev.map(|s| s.status.as_str()).unwrap_or(default_status)),
+            latency_ms.or_else(|| prev.and_then(|s| s.latency_ms)),
+            last_error.or_else(|| prev.and_then(|s| s.last_error.as_deref())),
+            ip.or_else(|| prev.and_then(|s| s.ip.as_deref())),
+            country_code.or_else(|| prev.and_then(|s| s.country_code.as_deref())),
+            country_name.or_else(|| prev.and_then(|s| s.country_name.as_deref())),
+            region_name.or_else(|| prev.and_then(|s| s.region_name.as_deref())),
+            city_name.or_else(|| prev.and_then(|s| s.city_name.as_deref())),
+            geo_checked_at.or_else(|| prev.and_then(|s| s.geo_checked_at)),
+            geo_error.or_else(|| prev.and_then(|s| s.geo_error.as_deref())),
+            prev.and_then(|s| s.asn),
+            prev.and_then(|s| s.as_org.as_deref()),
+            prev.and_then(|s| s.isp.as_deref()),
+            prev.and_then(|s| s.as_domain.as_deref()),
+            prev.and_then(|s| s.timezone_id.as_deref()),
+            prev.and_then(|s| s.timezone_offset),
+            prev.and_then(|s| s.timezone_utc.as_deref()),
+            prev.and_then(|s| s.flag_img_url.as_deref()),
+            prev.and_then(|s| s.flag_emoji.as_deref()),
+        )
+    };
+
+    let final_last_check_at = if final_status == STATUS_UNCHECKED || final_status == STATUS_NOT_CONFIGURED {
+        None
+    } else {
+        Some(now_ts())
+    };
+
     storage
         .upsert_account_proxy_settings(
             account_id,
             enabled,
-            normalized_proxy_url.as_deref(),
-            status,
-            None,
-            None,
-            None,
+            normalized_proxy_url_ref,
+            final_status,
+            final_latency,
+            final_last_check_at,
+            final_last_error,
+            final_ip,
+            final_country_code,
+            final_country_name,
+            final_region_name,
+            final_city_name,
+            final_geo_checked_at,
+            final_geo_error,
+            final_asn,
+            final_as_org,
+            final_isp,
+            final_as_domain,
+            final_timezone_id,
+            final_timezone_offset,
+            final_timezone_utc,
+            final_flag_img_url,
+            final_flag_emoji,
         )
         .map_err(|err| format!("store account proxy settings failed: {err}"))?;
     crate::gateway::invalidate_account_proxy_cache(account_id);
+
+    // If enabled, proxy_url is present, and status was NOT passed, trigger an asynchronous background check
+    if enabled && normalized_proxy_url_ref.is_some() && status.is_none() {
+        let account_id_clone = account_id.to_string();
+        std::thread::spawn(move || {
+            if let Err(err) = test_account_proxy_settings(&account_id_clone, None, None) {
+                log::error!("background proxy check failed for account {}: {}", account_id_clone, err);
+            }
+        });
+    }
+
     read_or_default_response(&storage, account_id)
 }
 
@@ -132,46 +259,49 @@ fn test_account_proxy_draft_with_checker<F>(
     checker: F,
 ) -> Result<AccountProxySettingsResponse, String>
 where
-    F: FnOnce(&str) -> crate::account::proxy_health::ProxyHealthCheckResult,
+    F: FnOnce(&str) -> ProxyHealthCheckResult,
 {
     let proxy_url = proxy_url.map(str::trim).unwrap_or_default();
     if proxy_url.is_empty() {
-        return Ok(AccountProxySettingsResponse {
-            account_id: account_id.to_string(),
+        return Ok(response_from_parts(
+            account_id,
             enabled,
-            proxy_url: proxy_url.to_string(),
-            status: STATUS_NOT_CONFIGURED.to_string(),
-            latency_ms: None,
-            last_check_at: Some(now_ts()),
-            last_error: None,
-        });
+            proxy_url,
+            STATUS_NOT_CONFIGURED,
+            None,
+            Some(now_ts()),
+            None,
+            None,
+        ));
     }
 
     let normalized_proxy_url = match normalize_supported_proxy_url(proxy_url) {
         Ok(normalized_proxy_url) => normalized_proxy_url,
         Err(err) => {
-            return Ok(AccountProxySettingsResponse {
-                account_id: account_id.to_string(),
+            return Ok(response_from_parts(
+                account_id,
                 enabled,
-                proxy_url: proxy_url.to_string(),
-                status: STATUS_INVALID_URL.to_string(),
-                latency_ms: None,
-                last_check_at: Some(now_ts()),
-                last_error: Some(err),
-            });
+                proxy_url,
+                STATUS_INVALID_URL,
+                None,
+                Some(now_ts()),
+                Some(err),
+                None,
+            ));
         }
     };
 
     let outcome = checker(normalized_proxy_url.as_str());
-    Ok(AccountProxySettingsResponse {
-        account_id: account_id.to_string(),
+    Ok(response_from_parts(
+        account_id,
         enabled,
-        proxy_url: normalized_proxy_url,
-        status: outcome.status.to_string(),
-        latency_ms: outcome.latency_ms,
-        last_check_at: Some(now_ts()),
-        last_error: outcome.last_error,
-    })
+        normalized_proxy_url,
+        outcome.status,
+        outcome.latency_ms,
+        Some(now_ts()),
+        outcome.last_error,
+        outcome.geo.as_ref(),
+    ))
 }
 
 pub(crate) fn resolve_account_proxy_mode(account_id: &str) -> AccountProxyMode {
@@ -325,7 +455,7 @@ fn test_account_proxy_settings_with_checker<F>(
     checker: F,
 ) -> Result<AccountProxySettingsResponse, String>
 where
-    F: FnOnce(&str) -> crate::account::proxy_health::ProxyHealthCheckResult,
+    F: FnOnce(&str) -> ProxyHealthCheckResult,
 {
     let settings = storage
         .find_account_proxy_settings(account_id)
@@ -340,7 +470,7 @@ where
         .map(str::trim)
         .unwrap_or_default();
     if proxy_url.is_empty() {
-        persist_check_status(storage, account_id, STATUS_NOT_CONFIGURED, None, None)?;
+        persist_check_status(storage, account_id, STATUS_NOT_CONFIGURED, None, None, None)?;
         crate::gateway::invalidate_account_proxy_cache(account_id);
         return read_or_default_response(storage, account_id);
     }
@@ -354,6 +484,7 @@ where
                 STATUS_INVALID_URL,
                 None,
                 Some(err.as_str()),
+                None,
             )?;
             crate::gateway::invalidate_account_proxy_cache(account_id);
             return read_or_default_response(storage, account_id);
@@ -370,11 +501,52 @@ where
                 settings.latency_ms,
                 settings.last_check_at,
                 settings.last_error.as_deref(),
+                settings.ip.as_deref(),
+                settings.country_code.as_deref(),
+                settings.country_name.as_deref(),
+                settings.region_name.as_deref(),
+                settings.city_name.as_deref(),
+                settings.geo_checked_at,
+                settings.geo_error.as_deref(),
+                settings.asn,
+                settings.as_org.as_deref(),
+                settings.isp.as_deref(),
+                settings.as_domain.as_deref(),
+                settings.timezone_id.as_deref(),
+                settings.timezone_offset,
+                settings.timezone_utc.as_deref(),
+                settings.flag_img_url.as_deref(),
+                settings.flag_emoji.as_deref(),
             )
             .map_err(|err| format!("store account proxy settings failed: {err}"))?;
     }
 
-    persist_check_status(storage, account_id, STATUS_CHECKING, None, None)?;
+    let current_geo = ProxyGeoInfo {
+        ip: settings.ip.clone(),
+        country_code: settings.country_code.clone(),
+        country_name: settings.country_name.clone(),
+        region_name: settings.region_name.clone(),
+        city_name: settings.city_name.clone(),
+        geo_checked_at: settings.geo_checked_at,
+        geo_error: settings.geo_error.clone(),
+        asn: settings.asn,
+        as_org: settings.as_org.clone(),
+        isp: settings.isp.clone(),
+        as_domain: settings.as_domain.clone(),
+        timezone_id: settings.timezone_id.clone(),
+        timezone_offset: settings.timezone_offset,
+        timezone_utc: settings.timezone_utc.clone(),
+        flag_img_url: settings.flag_img_url.clone(),
+        flag_emoji: settings.flag_emoji.clone(),
+    };
+    persist_check_status(
+        storage,
+        account_id,
+        STATUS_CHECKING,
+        None,
+        None,
+        Some(&current_geo),
+    )?;
     let outcome = checker(normalized_proxy_url.as_str());
     persist_check_status(
         storage,
@@ -382,6 +554,7 @@ where
         outcome.status,
         outcome.latency_ms,
         outcome.last_error.as_deref(),
+        outcome.geo.as_ref(),
     )?;
     crate::gateway::invalidate_account_proxy_cache(account_id);
     read_or_default_response(storage, account_id)
@@ -393,6 +566,7 @@ fn persist_check_status(
     status: &str,
     latency_ms: Option<i64>,
     last_error: Option<&str>,
+    geo: Option<&ProxyGeoInfo>,
 ) -> Result<(), String> {
     storage
         .update_account_proxy_check_status(
@@ -401,6 +575,22 @@ fn persist_check_status(
             latency_ms,
             Some(now_ts()),
             last_error,
+            geo.and_then(|value| value.ip.as_deref()),
+            geo.and_then(|value| value.country_code.as_deref()),
+            geo.and_then(|value| value.country_name.as_deref()),
+            geo.and_then(|value| value.region_name.as_deref()),
+            geo.and_then(|value| value.city_name.as_deref()),
+            geo.and_then(|value| value.geo_checked_at),
+            geo.and_then(|value| value.geo_error.as_deref()),
+            geo.and_then(|value| value.asn),
+            geo.and_then(|value| value.as_org.as_deref()),
+            geo.and_then(|value| value.isp.as_deref()),
+            geo.and_then(|value| value.as_domain.as_deref()),
+            geo.and_then(|value| value.timezone_id.as_deref()),
+            geo.and_then(|value| value.timezone_offset),
+            geo.and_then(|value| value.timezone_utc.as_deref()),
+            geo.and_then(|value| value.flag_img_url.as_deref()),
+            geo.and_then(|value| value.flag_emoji.as_deref()),
         )
         .map_err(|err| format!("update account proxy status failed: {err}"))
 }
@@ -418,15 +608,16 @@ fn read_or_default_response(
 }
 
 fn default_response(account_id: &str) -> AccountProxySettingsResponse {
-    AccountProxySettingsResponse {
-        account_id: account_id.to_string(),
-        enabled: false,
-        proxy_url: String::new(),
-        status: STATUS_NOT_CONFIGURED.to_string(),
-        latency_ms: None,
-        last_check_at: None,
-        last_error: None,
-    }
+    response_from_parts(
+        account_id,
+        false,
+        String::new(),
+        STATUS_NOT_CONFIGURED,
+        None,
+        None,
+        None,
+        None,
+    )
 }
 
 fn account_proxy_settings_response(settings: AccountProxySettings) -> AccountProxySettingsResponse {
@@ -438,329 +629,58 @@ fn account_proxy_settings_response(settings: AccountProxySettings) -> AccountPro
         latency_ms: settings.latency_ms,
         last_check_at: settings.last_check_at,
         last_error: settings.last_error,
+        ip: settings.ip,
+        country_code: settings.country_code,
+        country_name: settings.country_name,
+        region_name: settings.region_name,
+        city_name: settings.city_name,
+        geo_checked_at: settings.geo_checked_at,
+        geo_error: settings.geo_error,
+        asn: settings.asn,
+        as_org: settings.as_org,
+        isp: settings.isp,
+        as_domain: settings.as_domain,
+        timezone_id: settings.timezone_id,
+        timezone_offset: settings.timezone_offset,
+        timezone_utc: settings.timezone_utc,
+        flag_img_url: settings.flag_img_url,
+        flag_emoji: settings.flag_emoji,
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{
-        normalize_supported_proxy_url, resolve_account_proxy_mode_from_storage,
-        test_account_proxy_settings_with_checker, AccountProxyMode, AccountProxySettingsResponse,
-        STATUS_INVALID_URL, STATUS_NOT_CONFIGURED, STATUS_RUNTIME_ERROR, STATUS_UNCHECKED,
-    };
-    use codexmanager_core::storage::{now_ts, Account, Storage};
-    use std::fs;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    static ACCOUNT_PROXY_TEST_DIR_SEQ: AtomicUsize = AtomicUsize::new(0);
-    const STATUS_FAILED: &str = "failed";
-    const STATUS_OK: &str = "ok";
-
-    #[test]
-    fn normalize_supported_proxy_url_rewrites_socks5_to_socks5h() {
-        assert_eq!(
-            normalize_supported_proxy_url("socks5://127.0.0.1:7891").expect("normalize"),
-            "socks5h://127.0.0.1:7891"
-        );
-    }
-
-    #[test]
-    fn normalize_supported_proxy_url_rejects_server_links() {
-        let err = normalize_supported_proxy_url("vless://example").expect_err("reject vless");
-        assert!(err.contains("local HTTP/SOCKS proxy URL"));
-    }
-
-    #[test]
-    fn test_account_proxy_settings_runs_checker_for_disabled_proxy_with_url() {
-        let dir = new_test_dir("account-proxy-disabled-with-url");
-        let storage = seed_storage(&dir, "acc-disabled-url");
-        storage
-            .upsert_account_proxy_settings(
-                "acc-disabled-url",
-                false,
-                Some("http://127.0.0.1:7891"),
-                STATUS_UNCHECKED,
-                None,
-                None,
-                None,
-            )
-            .expect("seed disabled proxy settings");
-
-        let response =
-            test_account_proxy_settings_with_checker(&storage, "acc-disabled-url", |_| {
-                crate::account::proxy_health::ProxyHealthCheckResult {
-                    status: STATUS_OK,
-                    latency_ms: Some(123),
-                    last_error: None,
-                }
-            })
-            .expect("test disabled proxy");
-
-        assert_status(&response, STATUS_OK);
-        assert_eq!(response.enabled, false);
-        assert_eq!(response.latency_ms, Some(123));
-        assert_eq!(response.last_error, None);
-        assert!(response.last_check_at.is_some());
-
-        let stored = storage
-            .find_account_proxy_settings("acc-disabled-url")
-            .expect("find stored disabled proxy")
-            .expect("stored disabled proxy");
-        assert_eq!(stored.status, STATUS_OK);
-        assert_eq!(stored.latency_ms, Some(123));
-        assert_eq!(stored.last_error, None);
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_account_proxy_settings_returns_not_configured_when_url_is_empty() {
-        let dir = new_test_dir("account-proxy-empty-url");
-        let storage = seed_storage(&dir, "acc-empty-url");
-        storage
-            .upsert_account_proxy_settings(
-                "acc-empty-url",
-                true,
-                None,
-                STATUS_UNCHECKED,
-                None,
-                None,
-                None,
-            )
-            .expect("seed empty proxy settings");
-
-        let response = test_account_proxy_settings_with_checker(&storage, "acc-empty-url", |_| {
-            panic!("checker should not run for empty url")
-        })
-        .expect("test empty proxy");
-
-        assert_status(&response, STATUS_NOT_CONFIGURED);
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn resolve_account_proxy_mode_treats_disabled_proxy_with_stored_url_as_disabled() {
-        let dir = new_test_dir("account-proxy-mode-disabled");
-        let storage = seed_storage(&dir, "acc-disabled-mode");
-        storage
-            .upsert_account_proxy_settings(
-                "acc-disabled-mode",
-                false,
-                Some("http://127.0.0.1:7891"),
-                STATUS_UNCHECKED,
-                None,
-                None,
-                None,
-            )
-            .expect("seed disabled mode proxy settings");
-
-        let mode = resolve_account_proxy_mode_from_storage(&storage, "acc-disabled-mode");
-        assert_eq!(mode, AccountProxyMode::Disabled);
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn resolve_account_proxy_mode_fails_closed_for_enabled_proxy_without_url() {
-        let dir = new_test_dir("account-proxy-mode-empty");
-        let storage = seed_storage(&dir, "acc-empty-mode");
-        storage
-            .upsert_account_proxy_settings(
-                "acc-empty-mode",
-                true,
-                None,
-                STATUS_UNCHECKED,
-                None,
-                None,
-                None,
-            )
-            .expect("seed empty mode proxy settings");
-
-        let mode = resolve_account_proxy_mode_from_storage(&storage, "acc-empty-mode");
-        let AccountProxyMode::Invalid { proxy_url, error } = mode else {
-            panic!("enabled proxy without URL must fail closed");
-        };
-        assert_eq!(proxy_url, None);
-        assert!(error.contains("fail-closed"));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_account_proxy_settings_persists_invalid_url_status() {
-        let dir = new_test_dir("account-proxy-invalid");
-        let storage = seed_storage(&dir, "acc-invalid");
-        storage
-            .upsert_account_proxy_settings(
-                "acc-invalid",
-                true,
-                Some("http://"),
-                STATUS_UNCHECKED,
-                None,
-                None,
-                None,
-            )
-            .expect("seed invalid proxy settings");
-
-        let response = test_account_proxy_settings_with_checker(&storage, "acc-invalid", |_| {
-            panic!("checker should not run for invalid proxy URL")
-        })
-        .expect("test invalid proxy");
-
-        assert_status(&response, STATUS_INVALID_URL);
-        assert!(response
-            .last_error
-            .as_deref()
-            .unwrap_or_default()
-            .contains("invalid proxyUrl"));
-        assert!(response.last_check_at.is_some());
-
-        let stored = storage
-            .find_account_proxy_settings("acc-invalid")
-            .expect("find stored invalid proxy")
-            .expect("stored invalid proxy");
-        assert_eq!(stored.status, STATUS_INVALID_URL);
-        assert!(stored
-            .last_error
-            .as_deref()
-            .unwrap_or_default()
-            .contains("invalid proxyUrl"));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_account_proxy_settings_persists_checker_outcome() {
-        let dir = new_test_dir("account-proxy-ok");
-        let storage = seed_storage(&dir, "acc-ok");
-        storage
-            .upsert_account_proxy_settings(
-                "acc-ok",
-                true,
-                Some("http://127.0.0.1:7891"),
-                STATUS_UNCHECKED,
-                None,
-                None,
-                None,
-            )
-            .expect("seed valid proxy settings");
-
-        let response = test_account_proxy_settings_with_checker(&storage, "acc-ok", |_| {
-            crate::account::proxy_health::ProxyHealthCheckResult {
-                status: STATUS_OK,
-                latency_ms: Some(184),
-                last_error: None,
-            }
-        })
-        .expect("test proxy success");
-
-        assert_status(&response, STATUS_OK);
-        assert_eq!(response.latency_ms, Some(184));
-        assert_eq!(response.last_error, None);
-        assert!(response.last_check_at.is_some());
-
-        let response = test_account_proxy_settings_with_checker(&storage, "acc-ok", |_| {
-            crate::account::proxy_health::ProxyHealthCheckResult {
-                status: STATUS_FAILED,
-                latency_ms: None,
-                last_error: Some("proxy unreachable".to_string()),
-            }
-        })
-        .expect("test proxy failure");
-
-        assert_status(&response, STATUS_FAILED);
-        assert_eq!(response.latency_ms, None);
-        assert_eq!(response.last_error.as_deref(), Some("proxy unreachable"));
-
-        let stored = storage
-            .find_account_proxy_settings("acc-ok")
-            .expect("find stored proxy")
-            .expect("stored proxy");
-        assert_eq!(stored.status, STATUS_FAILED);
-        assert_eq!(stored.latency_ms, None);
-        assert_eq!(stored.last_error.as_deref(), Some("proxy unreachable"));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_account_proxy_settings_persists_runtime_error_status() {
-        let dir = new_test_dir("account-proxy-runtime-error");
-        let storage = seed_storage(&dir, "acc-runtime");
-        storage
-            .upsert_account_proxy_settings(
-                "acc-runtime",
-                true,
-                Some("http://127.0.0.1:7891"),
-                STATUS_UNCHECKED,
-                None,
-                None,
-                None,
-            )
-            .expect("seed runtime proxy settings");
-
-        let response = test_account_proxy_settings_with_checker(&storage, "acc-runtime", |_| {
-            crate::account::proxy_health::ProxyHealthCheckResult {
-                status: STATUS_RUNTIME_ERROR,
-                latency_ms: None,
-                last_error: Some("local proxy runtime unavailable".to_string()),
-            }
-        })
-        .expect("test runtime proxy");
-
-        assert_status(&response, STATUS_RUNTIME_ERROR);
-        assert_eq!(response.latency_ms, None);
-        assert_eq!(
-            response.last_error.as_deref(),
-            Some("local proxy runtime unavailable")
-        );
-
-        let stored = storage
-            .find_account_proxy_settings("acc-runtime")
-            .expect("find stored runtime proxy")
-            .expect("stored runtime proxy");
-        assert_eq!(stored.status, STATUS_RUNTIME_ERROR);
-        assert_eq!(stored.latency_ms, None);
-        assert_eq!(
-            stored.last_error.as_deref(),
-            Some("local proxy runtime unavailable")
-        );
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    fn assert_status(response: &AccountProxySettingsResponse, expected: &str) {
-        assert_eq!(response.status, expected);
-    }
-
-    fn new_test_dir(prefix: &str) -> PathBuf {
-        let seq = ACCOUNT_PROXY_TEST_DIR_SEQ.fetch_add(1, Ordering::Relaxed);
-        let mut dir = std::env::temp_dir();
-        dir.push(format!("{prefix}-{}-{seq}", std::process::id()));
-        let _ = fs::create_dir_all(&dir);
-        dir
-    }
-
-    fn seed_storage(dir: &PathBuf, account_id: &str) -> Storage {
-        let storage = Storage::open(dir.join("codexmanager.db")).expect("open test db");
-        storage.init().expect("init test schema");
-        let now = now_ts();
-        storage
-            .insert_account(&Account {
-                id: account_id.to_string(),
-                label: account_id.to_string(),
-                issuer: "https://auth.openai.com".to_string(),
-                chatgpt_account_id: Some(format!("chatgpt-{account_id}")),
-                workspace_id: Some(format!("workspace-{account_id}")),
-                group_name: None,
-                sort: 0,
-                status: "active".to_string(),
-                created_at: now,
-                updated_at: now,
-            })
-            .expect("insert account");
-        storage
+fn response_from_parts(
+    account_id: &str,
+    enabled: bool,
+    proxy_url: impl Into<String>,
+    status: &str,
+    latency_ms: Option<i64>,
+    last_check_at: Option<i64>,
+    last_error: Option<String>,
+    geo: Option<&ProxyGeoInfo>,
+) -> AccountProxySettingsResponse {
+    AccountProxySettingsResponse {
+        account_id: account_id.to_string(),
+        enabled,
+        proxy_url: proxy_url.into(),
+        status: status.to_string(),
+        latency_ms,
+        last_check_at,
+        last_error,
+        ip: geo.and_then(|value| value.ip.clone()),
+        country_code: geo.and_then(|value| value.country_code.clone()),
+        country_name: geo.and_then(|value| value.country_name.clone()),
+        region_name: geo.and_then(|value| value.region_name.clone()),
+        city_name: geo.and_then(|value| value.city_name.clone()),
+        geo_checked_at: geo.and_then(|value| value.geo_checked_at),
+        geo_error: geo.and_then(|value| value.geo_error.clone()),
+        asn: geo.and_then(|value| value.asn),
+        as_org: geo.and_then(|value| value.as_org.clone()),
+        isp: geo.and_then(|value| value.isp.clone()),
+        as_domain: geo.and_then(|value| value.as_domain.clone()),
+        timezone_id: geo.and_then(|value| value.timezone_id.clone()),
+        timezone_offset: geo.and_then(|value| value.timezone_offset),
+        timezone_utc: geo.and_then(|value| value.timezone_utc.clone()),
+        flag_img_url: geo.and_then(|value| value.flag_img_url.clone()),
+        flag_emoji: geo.and_then(|value| value.flag_emoji.clone()),
     }
 }

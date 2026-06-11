@@ -69,9 +69,26 @@ pub struct AccountProxySettings {
     pub latency_ms: Option<i64>,
     pub last_check_at: Option<i64>,
     pub last_error: Option<String>,
+    pub ip: Option<String>,
+    pub country_code: Option<String>,
+    pub country_name: Option<String>,
+    pub region_name: Option<String>,
+    pub city_name: Option<String>,
+    pub geo_checked_at: Option<i64>,
+    pub geo_error: Option<String>,
+    pub asn: Option<i64>,
+    pub as_org: Option<String>,
+    pub isp: Option<String>,
+    pub as_domain: Option<String>,
+    pub timezone_id: Option<String>,
+    pub timezone_offset: Option<i64>,
+    pub timezone_utc: Option<String>,
+    pub flag_img_url: Option<String>,
+    pub flag_emoji: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
+
 
 #[derive(Debug, Clone)]
 pub struct QuotaSourceModelAssignment {
@@ -1064,6 +1081,7 @@ impl Storage {
             |s| s.ensure_account_proxy_settings_table(),
         )?;
         self.ensure_api_key_rotation_columns()?;
+
         self.ensure_aggregate_apis_table()?;
         self.ensure_aggregate_api_supplier_model_tables()?;
         self.ensure_aggregate_api_secrets_table()?;

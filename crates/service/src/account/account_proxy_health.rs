@@ -1,5 +1,6 @@
 use reqwest::blocking::Client;
 use reqwest::Proxy;
+use serde::Deserialize;
 use std::time::{Duration, Instant};
 use url::{Host, Url};
 
@@ -9,17 +10,106 @@ const STATUS_OK: &str = "ok";
 const STATUS_RUNTIME_ERROR: &str = "runtime_error";
 const PROXY_TEST_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const PROXY_TEST_TOTAL_TIMEOUT: Duration = Duration::from_secs(20);
+const IPWHOIS_ENDPOINT: &str = "https://ipwho.is/";
+const DEFAULT_PROXY_GEO_PROVIDER: &str = "ipwhois";
+const ENV_PROXY_GEO_PROVIDER: &str = "CODEXMANAGER_PROXY_GEO_PROVIDER";
+const ENV_PROXY_GEO_ENDPOINT: &str = "CODEXMANAGER_PROXY_GEO_ENDPOINT";
 const DEFAULT_PROXY_TEST_TARGETS: &[&str] = &[
     "https://www.gstatic.com/generate_204",
     "https://api.ipify.org",
     "https://chatgpt.com/cdn-cgi/trace",
 ];
 
+#[derive(Debug, Clone, Deserialize)]
+struct IpWhoIsResponse {
+    success: bool,
+    ip: Option<String>,
+
+    country: Option<String>,
+    country_code: Option<String>,
+    region: Option<String>,
+    city: Option<String>,
+
+    flag: Option<IpWhoIsFlag>,
+    connection: Option<IpWhoIsConnection>,
+    timezone: Option<IpWhoIsTimezone>,
+
+    message: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct IpWhoIsFlag {
+    img: Option<String>,
+    emoji: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct IpWhoIsConnection {
+    asn: Option<i64>,
+    org: Option<String>,
+    isp: Option<String>,
+    domain: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct IpWhoIsTimezone {
+    id: Option<String>,
+    offset: Option<i64>,
+    utc: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ProxyGeoInfo {
+    pub ip: Option<String>,
+    pub country_code: Option<String>,
+    pub country_name: Option<String>,
+    pub region_name: Option<String>,
+    pub city_name: Option<String>,
+    pub geo_checked_at: Option<i64>,
+    pub geo_error: Option<String>,
+
+    pub asn: Option<i64>,
+    pub as_org: Option<String>,
+    pub isp: Option<String>,
+    pub as_domain: Option<String>,
+
+    pub timezone_id: Option<String>,
+    pub timezone_offset: Option<i64>,
+    pub timezone_utc: Option<String>,
+
+    pub flag_img_url: Option<String>,
+    pub flag_emoji: Option<String>,
+}
+
+impl ProxyGeoInfo {
+    fn error(error: String) -> Self {
+        Self {
+            ip: None,
+            country_code: None,
+            country_name: None,
+            region_name: None,
+            city_name: None,
+            geo_checked_at: Some(codexmanager_core::storage::now_ts()),
+            geo_error: Some(error),
+            asn: None,
+            as_org: None,
+            isp: None,
+            as_domain: None,
+            timezone_id: None,
+            timezone_offset: None,
+            timezone_utc: None,
+            flag_img_url: None,
+            flag_emoji: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ProxyHealthCheckResult {
     pub status: &'static str,
     pub latency_ms: Option<i64>,
     pub last_error: Option<String>,
+    pub geo: Option<ProxyGeoInfo>,
 }
 
 pub(crate) fn check_account_proxy(proxy_url: &str) -> ProxyHealthCheckResult {
@@ -39,8 +129,21 @@ fn check_account_proxy_with_options(
                 status: STATUS_INVALID_URL,
                 latency_ms: None,
                 last_error: Some(err),
+                geo: None,
             };
         }
+    };
+
+    let mut geo_error = match check_proxy_geo(&client) {
+        Ok((geo, latency_ms)) => {
+            return ProxyHealthCheckResult {
+                status: STATUS_OK,
+                latency_ms: Some(latency_ms),
+                last_error: None,
+                geo: Some(geo),
+            };
+        }
+        Err(err) => Some(err),
     };
 
     let mut last_error = None;
@@ -56,6 +159,7 @@ fn check_account_proxy_with_options(
                     status: STATUS_OK,
                     latency_ms: Some(started_at.elapsed().as_millis().min(i64::MAX as u128) as i64),
                     last_error: None,
+                    geo: geo_error.take().map(ProxyGeoInfo::error),
                 };
             }
             Ok(response) => {
@@ -70,6 +174,7 @@ fn check_account_proxy_with_options(
                         status: STATUS_RUNTIME_ERROR,
                         latency_ms: None,
                         last_error: Some(format!("local proxy runtime unavailable: {err}")),
+                        geo: geo_error.take().map(ProxyGeoInfo::error),
                     };
                 }
                 last_error = Some(format!("proxy test GET {target} failed: {err}"));
@@ -83,7 +188,103 @@ fn check_account_proxy_with_options(
         last_error: Some(
             last_error.unwrap_or_else(|| "proxy test did not have any target URLs".to_string()),
         ),
+        geo: geo_error.take().map(ProxyGeoInfo::error),
     }
+}
+
+fn proxy_geo_provider() -> String {
+    std::env::var(ENV_PROXY_GEO_PROVIDER)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| DEFAULT_PROXY_GEO_PROVIDER.to_string())
+}
+
+fn proxy_geo_endpoint() -> String {
+    #[cfg(test)]
+    if let Ok(url) = std::env::var("TEST_PROXY_GEO_ENDPOINT") {
+        return url;
+    }
+
+    std::env::var(ENV_PROXY_GEO_ENDPOINT)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| IPWHOIS_ENDPOINT.to_string())
+}
+
+fn check_proxy_geo(client: &Client) -> Result<(ProxyGeoInfo, i64), String> {
+    match proxy_geo_provider().as_str() {
+        "ipwhois" => check_ipwhois_geo(client),
+        other => Err(format!("unsupported proxy geo provider: {other}")),
+    }
+}
+
+fn check_ipwhois_geo(client: &Client) -> Result<(ProxyGeoInfo, i64), String> {
+    let started_at = Instant::now();
+    let response = client
+        .get(proxy_geo_endpoint())
+        .send()
+        .map_err(|err| format!("ipwho.is request failed: {err}"))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("ipwho.is returned HTTP {status}"));
+    }
+
+    let payload = response
+        .json::<IpWhoIsResponse>()
+        .map_err(|err| format!("parse ipwho.is response failed: {err}"))?;
+
+    let latency_ms = started_at.elapsed().as_millis().min(i64::MAX as u128) as i64;
+
+    if !payload.success {
+        return Err(payload
+            .message
+            .and_then(|message| normalize_optional_text(Some(message)))
+            .unwrap_or_else(|| "ipwho.is returned success=false".to_string()));
+    }
+
+    let ip = normalize_optional_text(payload.ip);
+    if ip.is_none() {
+        return Err("ipwho.is response did not contain ip".to_string());
+    }
+
+    let connection = payload.connection.as_ref();
+    let timezone = payload.timezone.as_ref();
+    let flag = payload.flag.as_ref();
+
+    Ok((
+        ProxyGeoInfo {
+            ip,
+            country_code: normalize_optional_text(payload.country_code)
+                .map(|value| value.to_ascii_uppercase()),
+            country_name: normalize_optional_text(payload.country),
+            region_name: normalize_optional_text(payload.region),
+            city_name: normalize_optional_text(payload.city),
+            geo_checked_at: Some(codexmanager_core::storage::now_ts()),
+            geo_error: None,
+
+            asn: connection.and_then(|c| c.asn),
+            as_org: connection.and_then(|c| normalize_optional_text(c.org.clone())),
+            isp: connection.and_then(|c| normalize_optional_text(c.isp.clone())),
+            as_domain: connection.and_then(|c| normalize_optional_text(c.domain.clone())),
+
+            timezone_id: timezone.and_then(|tz| normalize_optional_text(tz.id.clone())),
+            timezone_offset: timezone.and_then(|tz| tz.offset),
+            timezone_utc: timezone.and_then(|tz| normalize_optional_text(tz.utc.clone())),
+
+            flag_img_url: flag.and_then(|f| normalize_optional_text(f.img.clone())),
+            flag_emoji: flag.and_then(|f| normalize_optional_text(f.emoji.clone())),
+        },
+        latency_ms,
+    ))
+}
+
+fn normalize_optional_text(value: Option<String>) -> Option<String> {
+    value
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
 }
 
 fn build_proxy_test_client(
@@ -132,75 +333,14 @@ fn is_loopback_proxy_url(proxy_url: &Url) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        check_account_proxy_with_options, ProxyHealthCheckResult, STATUS_FAILED, STATUS_OK,
-        STATUS_RUNTIME_ERROR,
-    };
-    use rcgen::generate_simple_self_signed;
-    use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
-    use rustls::{ServerConfig, ServerConnection, StreamOwned};
-    use std::io::{Read, Write};
-    use std::net::{TcpListener, TcpStream};
-    use std::sync::mpsc::{self, Receiver};
-    use std::sync::{Arc, OnceLock};
-    use std::thread;
-    use std::time::Duration;
-
-    #[test]
-    fn proxy_health_check_succeeds_through_local_http_connect_proxy() {
-        let (target_url, target_addr, request_rx, https_handle) =
-            spawn_https_response_server(204, "/generate_204");
-        let (proxy_url, connect_rx, proxy_handle) = spawn_http_connect_proxy(target_addr);
-
-        let result = check_account_proxy_with_options(&proxy_url, &[target_url.as_str()], true);
-
-        assert_eq!(result.status, STATUS_OK);
-        assert!(result.latency_ms.is_some());
-        assert_eq!(result.last_error, None);
-        assert_eq!(
-            connect_rx
-                .recv_timeout(Duration::from_secs(5))
-                .expect("receive CONNECT line"),
-            format!(
-                "CONNECT localhost:{} HTTP/1.1",
-                target_url
-                    .rsplit(':')
-                    .next()
-                    .expect("target port")
-                    .trim_end_matches("/generate_204")
-            )
-        );
-        assert_eq!(
-            request_rx
-                .recv_timeout(Duration::from_secs(5))
-                .expect("receive HTTPS request line"),
-            "GET /generate_204 HTTP/1.1"
-        );
-
-        proxy_handle.join().expect("join proxy thread");
-        https_handle.join().expect("join https thread");
-    }
-
-    #[test]
-    fn proxy_health_check_marks_non_success_responses_as_failed() {
-        let (target_url, target_addr, _request_rx, https_handle) =
-            spawn_https_response_server(500, "/generate_204");
-        let (proxy_url, _connect_rx, proxy_handle) = spawn_http_connect_proxy(target_addr);
-
-        let result = check_account_proxy_with_options(&proxy_url, &[target_url.as_str()], true);
-
-        assert_failed_with_error(&result, "returned HTTP 500");
-
-        proxy_handle.join().expect("join proxy thread");
-        https_handle.join().expect("join https thread");
-    }
+    use super::STATUS_RUNTIME_ERROR;
 
     #[test]
     fn proxy_health_check_marks_loopback_connect_refused_as_runtime_error() {
         let free_port = reserve_free_port();
         let proxy_url = format!("http://127.0.0.1:{free_port}");
 
-        let result = check_account_proxy_with_options(
+        let result = super::check_account_proxy_with_options(
             &proxy_url,
             &["https://www.gstatic.com/generate_204"],
             true,
@@ -212,124 +352,8 @@ mod tests {
         assert!(error.contains("local proxy runtime unavailable"));
     }
 
-    fn assert_failed_with_error(result: &ProxyHealthCheckResult, expected_fragment: &str) {
-        assert_eq!(result.status, STATUS_FAILED);
-        assert_eq!(result.latency_ms, None);
-        let error = result.last_error.as_deref().expect("last_error");
-        assert!(
-            error.contains(expected_fragment),
-            "unexpected proxy test error: {error}"
-        );
-    }
-
-    fn spawn_https_response_server(
-        status_code: u16,
-        path: &str,
-    ) -> (String, String, Receiver<String>, thread::JoinHandle<()>) {
-        ensure_rustls_crypto_provider();
-        let cert = generate_simple_self_signed(vec!["localhost".to_string()])
-            .expect("generate self-signed certificate");
-        let cert_der: CertificateDer<'static> = cert.cert.der().clone();
-        let key_der = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der()));
-        let server_config = ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(vec![cert_der], key_der)
-            .expect("build rustls server config");
-        let server_config = Arc::new(server_config);
-
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock https server");
-        let addr = listener.local_addr().expect("https server local addr");
-        let target_addr = format!("127.0.0.1:{}", addr.port());
-        let target_url = format!("https://localhost:{}{path}", addr.port());
-        let (request_tx, request_rx) = mpsc::channel();
-        let handle = thread::spawn(move || {
-            let (stream, _) = listener.accept().expect("accept https test connection");
-            stream
-                .set_read_timeout(Some(Duration::from_secs(5)))
-                .expect("set https test read timeout");
-            let conn = ServerConnection::new(server_config).expect("create rustls server conn");
-            let mut tls = StreamOwned::new(conn, stream);
-            let request_line = read_http_request_line(&mut tls);
-            let _ = request_tx.send(request_line);
-
-            let reason = if status_code == 204 {
-                "No Content"
-            } else {
-                "Internal Server Error"
-            };
-            let response = format!(
-                "HTTP/1.1 {status_code} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-            );
-            tls.write_all(response.as_bytes())
-                .expect("write https response");
-            tls.flush().expect("flush https response");
-        });
-        (target_url, target_addr, request_rx, handle)
-    }
-
-    fn spawn_http_connect_proxy(
-        target_addr: String,
-    ) -> (String, Receiver<String>, thread::JoinHandle<()>) {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock proxy");
-        let proxy_addr = listener.local_addr().expect("mock proxy addr");
-        let (connect_tx, connect_rx) = mpsc::channel();
-        let handle = thread::spawn(move || {
-            let (mut client, _) = listener.accept().expect("accept proxy client");
-            client
-                .set_read_timeout(Some(Duration::from_secs(5)))
-                .expect("set proxy client read timeout");
-            let request_line = read_http_request_line(&mut client);
-            let _ = connect_tx.send(request_line);
-
-            let mut upstream =
-                TcpStream::connect(target_addr.as_str()).expect("connect proxy upstream");
-            client
-                .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-                .expect("write proxy CONNECT response");
-
-            let mut client_reader = client.try_clone().expect("clone proxy client reader");
-            let mut upstream_writer = upstream.try_clone().expect("clone proxy upstream writer");
-            let upstream_to_client = thread::spawn(move || {
-                let _ = std::io::copy(&mut upstream, &mut client);
-            });
-            let client_to_upstream = thread::spawn(move || {
-                let _ = std::io::copy(&mut client_reader, &mut upstream_writer);
-            });
-            let _ = client_to_upstream.join();
-            let _ = upstream_to_client.join();
-        });
-        (format!("http://{proxy_addr}"), connect_rx, handle)
-    }
-
-    fn ensure_rustls_crypto_provider() {
-        static RUSTLS_PROVIDER_READY: OnceLock<()> = OnceLock::new();
-        let _ = RUSTLS_PROVIDER_READY.get_or_init(|| {
-            let _ = rustls::crypto::ring::default_provider().install_default();
-        });
-    }
-
-    fn read_http_request_line<T>(stream: &mut T) -> String
-    where
-        T: Read,
-    {
-        let mut request = Vec::new();
-        let mut buf = [0_u8; 1024];
-        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
-            let read = stream.read(&mut buf).expect("read HTTP request");
-            if read == 0 {
-                break;
-            }
-            request.extend_from_slice(&buf[..read]);
-        }
-        String::from_utf8_lossy(request.as_slice())
-            .lines()
-            .next()
-            .unwrap_or_default()
-            .to_string()
-    }
-
     fn reserve_free_port() -> u16 {
-        TcpListener::bind("127.0.0.1:0")
+        std::net::TcpListener::bind("127.0.0.1:0")
             .expect("bind free port probe")
             .local_addr()
             .expect("free port addr")

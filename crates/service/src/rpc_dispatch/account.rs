@@ -114,8 +114,32 @@ pub(super) fn try_handle(req: &JsonRpcRequest) -> Option<JsonRpcResponse> {
             let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
             let enabled = super::bool_param(req, "enabled").unwrap_or(false);
             let proxy_url = first_str_param(req, &["proxyUrl", "proxy_url"]);
+            
+            let status = super::str_param(req, "status");
+            let latency_ms = super::i64_param(req, "latencyMs").or_else(|| super::i64_param(req, "latency_ms"));
+            let last_error = super::str_param(req, "lastError").or_else(|| super::str_param(req, "last_error"));
+            let ip = super::str_param(req, "ip");
+            let country_code = super::str_param(req, "countryCode").or_else(|| super::str_param(req, "country_code"));
+            let country_name = super::str_param(req, "countryName").or_else(|| super::str_param(req, "country_name"));
+            let region_name = super::str_param(req, "regionName").or_else(|| super::str_param(req, "region_name"));
+            let city_name = super::str_param(req, "cityName").or_else(|| super::str_param(req, "city_name"));
+            let geo_checked_at = super::i64_param(req, "geoCheckedAt").or_else(|| super::i64_param(req, "geo_checked_at"));
+            let geo_error = super::str_param(req, "geoError").or_else(|| super::str_param(req, "geo_error"));
+
             super::value_or_error(account_proxy::set_account_proxy_settings(
-                account_id, enabled, proxy_url,
+                account_id,
+                enabled,
+                proxy_url,
+                status,
+                latency_ms,
+                last_error,
+                ip,
+                country_code,
+                country_name,
+                region_name,
+                city_name,
+                geo_checked_at,
+                geo_error,
             ))
         }
         "account/proxy/clear" => {
