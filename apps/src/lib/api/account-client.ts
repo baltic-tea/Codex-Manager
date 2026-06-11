@@ -96,6 +96,12 @@ export interface AccountProxySetPayload {
   proxyUrl?: string | null;
 }
 
+export interface AccountProxyTestPayload {
+  accountId: string;
+  enabled?: boolean;
+  proxyUrl?: string | null;
+}
+
 export interface AccountDeleteByStatusesPayload {
   statuses: string[];
 }
@@ -558,9 +564,18 @@ export const accountClient = {
     readAccountProxySettings(
       await invoke<unknown>("service_account_proxy_clear", withAddr({ accountId })),
     ),
-  testProxySettings: async (accountId: string): Promise<AccountProxySettings> =>
+  testProxySettings: async (
+    params: AccountProxyTestPayload,
+  ): Promise<AccountProxySettings> =>
     readAccountProxySettings(
-      await invoke<unknown>("service_account_proxy_test", withAddr({ accountId })),
+      await invoke<unknown>(
+        "service_account_proxy_test",
+        withAddr({
+          accountId: params.accountId,
+          enabled: params.enabled,
+          proxyUrl: params.proxyUrl ?? null,
+        }),
+      ),
     ),
 
   async getUsage(accountId: string): Promise<AccountUsage | null> {

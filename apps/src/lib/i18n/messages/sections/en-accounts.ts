@@ -29,13 +29,17 @@ export const EN_ACCOUNTS_MESSAGES: MessageCatalog = {
   "保存账号代理失败": "Failed to save account proxy",
   "测试账号代理": "Test account proxy",
   "测试账号代理失败": "Failed to test account proxy",
+  "测试": "Test",
   "测试中": "Testing",
   "未测试": "Untested",
   "测试失败": "Test failed",
   "测试状态": "Test status",
+  "可用": "Available",
+  "运行时错误": "Runtime error",
   "从未检查": "Never checked",
   "代理地址": "Proxy URL",
   "地址无效": "Invalid URL",
+  "未配置": "Not configured",
   "刷新 AT/RT": "Refresh AT/RT",
   "刷新 AT/RT 失败": "Failed to refresh AT/RT",
   "刷新全部 AT/RT": "Refresh all AT/RT",
@@ -46,7 +50,11 @@ export const EN_ACCOUNTS_MESSAGES: MessageCatalog = {
   "读取账号代理失败": "Failed to read account proxy",
   "服务未连接，暂时无法读取账号代理":
     "Service is not connected, account proxy cannot be read yet",
+  "保存": "Save",
   "默认路由": "Default route",
+  "当前模式": "Current mode",
+  "清除": "Clear",
+  "错误": "Error",
   "启用后，该账号会优先使用这里的代理地址。":
     "When enabled, this account uses this proxy URL before other routing.",
   "启用账号代理": "Enable account proxy",
@@ -103,6 +111,8 @@ export const EN_ACCOUNTS_MESSAGES: MessageCatalog = {
     "Choose an export mode. If accounts are selected, only the selected items will be exported.",
   "选择要删除的账号状态；删除后不可恢复。":
     "Choose the account statuses to delete. Deletion cannot be undone.",
+  "建议登录、刷新、用量和 API 请求保持同一代理与地区，以降低账号风控和状态漂移。":
+    "Use the same proxy and region for login, refresh, usage, and API requests to reduce account risk controls and state drift.",
   "支持 http、https、socks5、socks5h；sing-box mixed inbound 通常填写 http://127.0.0.1:端口。":
     "Supports http, https, socks5, and socks5h. For sing-box mixed inbound, usually enter http://127.0.0.1:port.",
   "最近检查": "Last check",

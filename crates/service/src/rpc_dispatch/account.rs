@@ -124,7 +124,11 @@ pub(super) fn try_handle(req: &JsonRpcRequest) -> Option<JsonRpcResponse> {
         }
         "account/proxy/test" => {
             let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
-            super::value_or_error(account_proxy::test_account_proxy_settings(account_id))
+            let enabled = super::bool_param(req, "enabled");
+            let proxy_url = first_str_param(req, &["proxyUrl", "proxy_url"]);
+            super::value_or_error(account_proxy::test_account_proxy_settings(
+                account_id, enabled, proxy_url,
+            ))
         }
         "account/import" => {
             let mut contents = req

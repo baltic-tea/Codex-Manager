@@ -366,6 +366,8 @@ export function AccountsPageView(props: AccountsPageViewProps) {
     switch (status) {
       case "ok":
         return t("可用");
+      case "runtime_error":
+        return t("运行时错误");
       case "failed":
         return t("测试失败");
       case "invalid_url":
@@ -1235,7 +1237,7 @@ export function AccountsPageView(props: AccountsPageViewProps) {
             <DialogTitle>{t("账号代理")}</DialogTitle>
             <DialogDescription>
               {proxyDialogAccount
-                ? `${proxyDialogAccount.name} · ${proxyDialogAccount.id}`
+                ? proxyDialogAccount.name
                 : t("为单个 OpenAI 账号配置本地代理。")}
             </DialogDescription>
           </DialogHeader>
@@ -1258,15 +1260,31 @@ export function AccountsPageView(props: AccountsPageViewProps) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="account-proxy-url">{t("代理地址")}</Label>
-              <Input
-                id="account-proxy-url"
-                value={proxyUrlDraft}
-                disabled={accountProxyBusy}
-                onChange={(event) => setProxyUrlDraft(event.target.value)}
-                placeholder="http://127.0.0.1:7891"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="account-proxy-url"
+                  value={proxyUrlDraft}
+                  disabled={accountProxyBusy}
+                  onChange={(event) => setProxyUrlDraft(event.target.value)}
+                  placeholder="http://127.0.0.1:7891"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={accountProxyBusy || !proxySettings}
+                  onClick={() => void handleClearProxySettings()}
+                >
+                  {isClearingAccountProxy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  {t("清除")}
+                </Button>
+              </div>
               <p className="text-[11px] leading-4 text-muted-foreground">
                 {t("支持 http、https、socks5、socks5h；sing-box mixed inbound 通常填写 http://127.0.0.1:端口。")}
+              </p>
+              <p className="text-[11px] leading-4 text-amber-600 dark:text-amber-400">
+                {t("建议登录、刷新、用量和 API 请求保持同一代理与地区，以降低账号风控和状态漂移。")}
               </p>
             </div>
             <div className="grid gap-2 rounded-xl bg-muted/20 px-3 py-3 text-xs sm:grid-cols-2">
@@ -1303,21 +1321,19 @@ export function AccountsPageView(props: AccountsPageViewProps) {
             </div>
           </div>
           <DialogFooter className="mx-0 mb-0 gap-2 rounded-b-xl border-t bg-muted/40 px-6 py-4 sm:gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={accountProxyBusy || !proxySettings}
-              onClick={() => void handleClearProxySettings()}
+            <DialogClose
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "rounded-xl",
+              )}
+              disabled={accountProxyBusy}
             >
-              {isClearingAccountProxy ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              {t("清除")}
-            </Button>
+              {t("关闭")}
+            </DialogClose>
             <Button
               type="button"
               variant="outline"
-              disabled={accountProxyBusy || !proxySettings}
+              disabled={accountProxyBusy || !proxyDialogAccount}
               onClick={() => void handleTestProxySettings()}
             >
               {isTestingAccountProxy ? (

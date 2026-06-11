@@ -30,6 +30,7 @@ type WarmupPayload = Parameters<typeof accountClient.warmup>[0];
 type WarmupResult = Awaited<ReturnType<typeof accountClient.warmup>>;
 type AccountProxySettings = Awaited<ReturnType<typeof accountClient.getProxySettings>>;
 type AccountProxySetPayload = Parameters<typeof accountClient.setProxySettings>[0];
+type AccountProxyTestPayload = Parameters<typeof accountClient.testProxySettings>[0];
 type RefreshAllRtResult = Awaited<
   ReturnType<typeof accountClient.refreshAllChatgptAuthTokens>
 >;
@@ -840,7 +841,8 @@ export function useAccounts() {
   });
 
   const testAccountProxyMutation = useMutation({
-    mutationFn: (accountId: string) => accountClient.testProxySettings(accountId),
+    mutationFn: (params: AccountProxyTestPayload) =>
+      accountClient.testProxySettings(params),
     onSuccess: async (settings) => {
       await invalidateUsageData();
       if (settings.status === "ok") {
@@ -951,9 +953,9 @@ export function useAccounts() {
       if (!ensureServiceReady("清除账号代理")) return;
       return await clearAccountProxyMutation.mutateAsync(accountId);
     },
-    testAccountProxySettings: async (accountId: string) => {
+    testAccountProxySettings: async (params: AccountProxyTestPayload) => {
       if (!ensureServiceReady("测试账号代理")) return;
-      return await testAccountProxyMutation.mutateAsync(accountId);
+      return await testAccountProxyMutation.mutateAsync(params);
     },
     updateAccountSort: async (accountId: string, sort: number) => {
       if (!ensureServiceReady("更新账号顺序")) return;

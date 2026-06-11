@@ -285,8 +285,14 @@ pub async fn service_account_proxy_clear(
 pub async fn service_account_proxy_test(
     addr: Option<String>,
     account_id: String,
+    enabled: Option<bool>,
+    proxy_url: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    let params = serde_json::json!({ "accountId": account_id });
+    let params = serde_json::json!({
+        "accountId": account_id,
+        "enabled": enabled,
+        "proxyUrl": proxy_url,
+    });
     rpc_call_in_background("account/proxy/test", addr, Some(params)).await
 }
 

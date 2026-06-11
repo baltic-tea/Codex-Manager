@@ -100,12 +100,77 @@ pub(crate) fn clear_account_proxy_settings(
 
 pub(crate) fn test_account_proxy_settings(
     account_id: &str,
+    enabled: Option<bool>,
+    proxy_url: Option<&str>,
 ) -> Result<AccountProxySettingsResponse, String> {
     let storage = open_storage_for_account(account_id)?;
     let account_id = normalize_account_id(account_id)?;
     ensure_account_exists(&storage, account_id)?;
-    test_account_proxy_settings_with_checker(&storage, account_id, |proxy_url| {
-        crate::account::proxy_health::check_account_proxy(proxy_url)
+    match (enabled, proxy_url) {
+        (Some(enabled), proxy_url) => {
+            test_account_proxy_draft_with_checker(account_id, enabled, proxy_url, |proxy_url| {
+                crate::account::proxy_health::check_account_proxy(proxy_url)
+            })
+        }
+        (None, None) => {
+            test_account_proxy_settings_with_checker(&storage, account_id, |proxy_url| {
+                crate::account::proxy_health::check_account_proxy(proxy_url)
+            })
+        }
+        (None, Some(proxy_url)) => {
+            test_account_proxy_draft_with_checker(account_id, true, Some(proxy_url), |proxy_url| {
+                crate::account::proxy_health::check_account_proxy(proxy_url)
+            })
+        }
+    }
+}
+
+fn test_account_proxy_draft_with_checker<F>(
+    account_id: &str,
+    enabled: bool,
+    proxy_url: Option<&str>,
+    checker: F,
+) -> Result<AccountProxySettingsResponse, String>
+where
+    F: FnOnce(&str) -> crate::account::proxy_health::ProxyHealthCheckResult,
+{
+    let proxy_url = proxy_url.map(str::trim).unwrap_or_default();
+    if proxy_url.is_empty() {
+        return Ok(AccountProxySettingsResponse {
+            account_id: account_id.to_string(),
+            enabled,
+            proxy_url: proxy_url.to_string(),
+            status: STATUS_NOT_CONFIGURED.to_string(),
+            latency_ms: None,
+            last_check_at: Some(now_ts()),
+            last_error: None,
+        });
+    }
+
+    let normalized_proxy_url = match normalize_supported_proxy_url(proxy_url) {
+        Ok(normalized_proxy_url) => normalized_proxy_url,
+        Err(err) => {
+            return Ok(AccountProxySettingsResponse {
+                account_id: account_id.to_string(),
+                enabled,
+                proxy_url: proxy_url.to_string(),
+                status: STATUS_INVALID_URL.to_string(),
+                latency_ms: None,
+                last_check_at: Some(now_ts()),
+                last_error: Some(err),
+            });
+        }
+    };
+
+    let outcome = checker(normalized_proxy_url.as_str());
+    Ok(AccountProxySettingsResponse {
+        account_id: account_id.to_string(),
+        enabled,
+        proxy_url: normalized_proxy_url,
+        status: outcome.status.to_string(),
+        latency_ms: outcome.latency_ms,
+        last_check_at: Some(now_ts()),
+        last_error: outcome.last_error,
     })
 }
 
@@ -273,7 +338,7 @@ where
         .as_deref()
         .map(str::trim)
         .unwrap_or_default();
-    if !settings.enabled || proxy_url.is_empty() {
+    if proxy_url.is_empty() {
         persist_check_status(storage, account_id, STATUS_NOT_CONFIGURED, None, None)?;
         crate::gateway::invalidate_account_proxy_cache(account_id);
         return read_or_default_response(storage, account_id);
@@ -380,8 +445,7 @@ mod tests {
     use super::{
         normalize_supported_proxy_url, resolve_account_proxy_mode_from_storage,
         test_account_proxy_settings_with_checker, AccountProxyMode, AccountProxySettingsResponse,
-        STATUS_CHECKING, STATUS_INVALID_URL, STATUS_NOT_CONFIGURED, STATUS_RUNTIME_ERROR,
-        STATUS_UNCHECKED,
+        STATUS_INVALID_URL, STATUS_NOT_CONFIGURED, STATUS_RUNTIME_ERROR, STATUS_UNCHECKED,
     };
     use codexmanager_core::storage::{now_ts, Account, Storage};
     use std::fs;
@@ -407,38 +471,70 @@ mod tests {
     }
 
     #[test]
-    fn test_account_proxy_settings_returns_not_configured_for_disabled_proxy() {
-        let dir = new_test_dir("account-proxy-disabled");
-        let storage = seed_storage(&dir, "acc-disabled");
+    fn test_account_proxy_settings_runs_checker_for_disabled_proxy_with_url() {
+        let dir = new_test_dir("account-proxy-disabled-with-url");
+        let storage = seed_storage(&dir, "acc-disabled-url");
         storage
             .upsert_account_proxy_settings(
-                "acc-disabled",
+                "acc-disabled-url",
                 false,
                 Some("http://127.0.0.1:7891"),
-                STATUS_CHECKING,
-                Some(42),
-                Some(100),
-                Some("stale"),
+                STATUS_UNCHECKED,
+                None,
+                None,
+                None,
             )
             .expect("seed disabled proxy settings");
 
-        let response = test_account_proxy_settings_with_checker(&storage, "acc-disabled", |_| {
-            panic!("checker should not run for disabled proxy")
-        })
-        .expect("test disabled proxy");
+        let response =
+            test_account_proxy_settings_with_checker(&storage, "acc-disabled-url", |_| {
+                crate::account::proxy_health::ProxyHealthCheckResult {
+                    status: STATUS_OK,
+                    latency_ms: Some(123),
+                    last_error: None,
+                }
+            })
+            .expect("test disabled proxy");
 
-        assert_status(&response, STATUS_NOT_CONFIGURED);
-        assert_eq!(response.latency_ms, None);
+        assert_status(&response, STATUS_OK);
+        assert_eq!(response.enabled, false);
+        assert_eq!(response.latency_ms, Some(123));
         assert_eq!(response.last_error, None);
         assert!(response.last_check_at.is_some());
 
         let stored = storage
-            .find_account_proxy_settings("acc-disabled")
+            .find_account_proxy_settings("acc-disabled-url")
             .expect("find stored disabled proxy")
             .expect("stored disabled proxy");
-        assert_eq!(stored.status, STATUS_NOT_CONFIGURED);
-        assert_eq!(stored.latency_ms, None);
+        assert_eq!(stored.status, STATUS_OK);
+        assert_eq!(stored.latency_ms, Some(123));
         assert_eq!(stored.last_error, None);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_account_proxy_settings_returns_not_configured_when_url_is_empty() {
+        let dir = new_test_dir("account-proxy-empty-url");
+        let storage = seed_storage(&dir, "acc-empty-url");
+        storage
+            .upsert_account_proxy_settings(
+                "acc-empty-url",
+                true,
+                None,
+                STATUS_UNCHECKED,
+                None,
+                None,
+                None,
+            )
+            .expect("seed empty proxy settings");
+
+        let response = test_account_proxy_settings_with_checker(&storage, "acc-empty-url", |_| {
+            panic!("checker should not run for empty url")
+        })
+        .expect("test empty proxy");
+
+        assert_status(&response, STATUS_NOT_CONFIGURED);
 
         let _ = fs::remove_dir_all(dir);
     }

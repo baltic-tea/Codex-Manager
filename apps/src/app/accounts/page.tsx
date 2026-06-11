@@ -486,7 +486,6 @@ const toggleCleanupStatus = (rawStatus: string) => {
         setProxyEnabledDraft(settings.enabled);
         setProxyUrlDraft(settings.proxyUrl || "");
       }
-      setProxyDialogAccount(null);
     } catch {
       // hook handles toast
     }
@@ -509,7 +508,11 @@ const toggleCleanupStatus = (rawStatus: string) => {
   const handleTestProxySettings = async () => {
     if (!proxyDialogAccount) return;
     try {
-      const settings = await testAccountProxySettings(proxyDialogAccount.id);
+      const settings = await testAccountProxySettings({
+        accountId: proxyDialogAccount.id,
+        enabled: proxyEnabledDraft,
+        proxyUrl: proxyUrlDraft,
+      });
       if (settings) {
         setProxySettings(settings);
         setProxyEnabledDraft(settings.enabled);
