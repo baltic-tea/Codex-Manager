@@ -476,10 +476,25 @@ const toggleCleanupStatus = (rawStatus: string) => {
   const handleSaveProxySettings = async () => {
     if (!proxyDialogAccount) return;
     try {
+      const isTested = proxySettings && proxySettings.proxyUrl === proxyUrlDraft;
       const settings = await setAccountProxySettings({
         accountId: proxyDialogAccount.id,
         enabled: proxyEnabledDraft,
         proxyUrl: proxyUrlDraft,
+        ...(isTested
+          ? {
+              status: proxySettings.status,
+              latencyMs: proxySettings.latencyMs,
+              lastError: proxySettings.lastError,
+              ip: proxySettings.ip,
+              countryCode: proxySettings.countryCode,
+              countryName: proxySettings.countryName,
+              regionName: proxySettings.regionName,
+              cityName: proxySettings.cityName,
+              geoCheckedAt: proxySettings.geoCheckedAt,
+              geoError: proxySettings.geoError,
+            }
+          : {}),
       });
       if (settings) {
         setProxySettings(settings);

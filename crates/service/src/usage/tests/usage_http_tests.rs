@@ -132,18 +132,6 @@ fn seed_account_proxy(db_path: &PathBuf, account_id: &str, enabled: bool, proxy_
             None,
             None,
             None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
         )
         .expect("seed account proxy");
     crate::gateway::invalidate_account_proxy_cache(account_id);

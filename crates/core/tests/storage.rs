@@ -225,6 +225,8 @@ fn storage_can_update_and_clear_account_proxy_settings() {
             None,
             None,
             None,
+            None,
+            None,
         )
         .expect("seed proxy settings");
     storage
