@@ -1208,7 +1208,7 @@ export function AccountsPageView(props: AccountsPageViewProps) {
         </div>
       </div>
 
-      {addAccountModalOpen ? (
+{addAccountModalOpen ? (
         <AddAccountModal
           open={isPageActive && addAccountModalOpen}
           onOpenChange={setAddAccountModalOpen}
@@ -1281,7 +1281,7 @@ export function AccountsPageView(props: AccountsPageViewProps) {
                 </Button>
               </div>
               <p className="text-[11px] leading-4 text-muted-foreground">
-                {t("支持 http、https、socks5、socks5h；sing-box mixed inbound 通常填写 http://127.0.0.1:端口。")}
+                {t("支持 http、https、socks4、socks5；sing-box mixed inbound 通常填写 http://127.0.0.1:端口。")}
               </p>
               <p className="text-[11px] leading-4 text-amber-600 dark:text-amber-400">
                 {t("建议登录、刷新、用量和 API 请求保持同一代理与地区，以降低账号风控和状态漂移。")}

@@ -1,4 +1,4 @@
-use client";
+"use client";
 
 import type { MessageCatalog } from "../types";
 
@@ -32,6 +32,7 @@ export const RU_ACCOUNTS_MESSAGES: MessageCatalog = {
 	测试账号代理: "Проверить прокси аккаунта",
 	测试账号代理失败: "Не удалось проверить прокси аккаунта",
 	测试: "Проверить",
+
 	测试中: "Проверяется",
 	未测试: "Не проверено",
 	测试失败: "Проверка не пройдена",
@@ -116,8 +117,8 @@ export const RU_ACCOUNTS_MESSAGES: MessageCatalog = {
 		"Выберите статусы аккаунтов для удаления. Удаление нельзя отменить.",
 	"建议登录、刷新、用量和 API 请求保持同一代理与地区，以降低账号风控和状态漂移。":
 		"Рекомендуется использовать один и тот же прокси и регион для входа, refresh, usage и API-запросов, чтобы снизить риск блокировок и рассинхронизации состояния аккаунта.",
-	"支持 http、https、socks5、socks5h；sing-box mixed inbound 通常填写 http://127.0.0.1:端口。":
-		"Поддерживаются http, https, socks5 и socks5h. Для sing-box mixed inbound обычно указывают http://127.0.0.1:port.",
+	"支持 http、https、socks4、socks5；sing-box mixed inbound 通常填写 http://127.0.0.1:端口。":
+		"Поддерживаются http, https, socks4 и socks5. Для sing-box mixed inbound обычно указывают http://127.0.0.1:port.",
 	最近检查: "Последняя проверка",
 	"这里展示账号套餐接口同步回来的套餐状态与时间信息。":
 		"Здесь показаны статус тарифа и время, синхронизированные из API тарифов аккаунта.",

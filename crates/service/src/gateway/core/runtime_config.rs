@@ -2404,9 +2404,7 @@ fn rewrite_socks_proxy_url(proxy_url: &str) -> String {
     } else if let Some(rest) = normalized.strip_prefix("https://socks") {
         normalized = format!("socks{rest}");
     }
-    if normalized.starts_with("socks5://") {
-        normalized = normalized.replacen("socks5://", "socks5h://", 1);
-    } else if normalized.starts_with("socks://") {
+    if normalized.starts_with("socks://") {
         normalized = normalized.replacen("socks://", "socks5h://", 1);
     }
     normalized

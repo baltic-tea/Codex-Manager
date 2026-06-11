@@ -118,7 +118,7 @@ fn reload_from_env_updates_timeout_and_proxy() {
     );
     assert_eq!(
         upstream_proxy_url().as_deref(),
-        Some("socks5h://127.0.0.1:7890")
+        Some("socks5://127.0.0.1:7890")
     );
 }
 
@@ -210,9 +210,9 @@ fn parse_proxy_list_env_normalizes_socks_entries() {
     let parsed = parse_proxy_list_env();
 
     assert_eq!(parsed.len(), 3);
-    assert_eq!(parsed[0], "socks5h://127.0.0.1:7890");
+    assert_eq!(parsed[0], "socks5://127.0.0.1:7890");
     assert_eq!(parsed[1], "socks5h://127.0.0.1:7891");
-    assert_eq!(parsed[2], "socks5h://127.0.0.1:7892");
+    assert_eq!(parsed[2], "socks5://127.0.0.1:7892");
 }
 
 /// 函数 `stable_proxy_index_is_deterministic`
@@ -287,10 +287,10 @@ fn set_upstream_proxy_url_normalizes_socks_scheme() {
     let applied =
         set_upstream_proxy_url(Some("https://socks5://127.0.0.1:7890")).expect("set proxy");
 
-    assert_eq!(applied.as_deref(), Some("socks5h://127.0.0.1:7890"));
+    assert_eq!(applied.as_deref(), Some("socks5://127.0.0.1:7890"));
     assert_eq!(
         std::env::var(ENV_UPSTREAM_PROXY_URL).ok().as_deref(),
-        Some("socks5h://127.0.0.1:7890")
+        Some("socks5://127.0.0.1:7890")
     );
 }
 

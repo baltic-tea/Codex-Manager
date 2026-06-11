@@ -3,7 +3,7 @@
 import type { MessageCatalog } from "../types";
 
 export const KO_ACCOUNTS_MESSAGES: MessageCatalog = {
-  "5h 容量覆盖（Token）": "5h 용량 오버라이드(Token)",
+"5h 容量覆盖（Token）": "5h 용량 오버라이드(Token)",
   "7d 容量覆盖（Token）": "7d 용량 오버라이드(Token)",
   "AT/RT 刷新中...": "AT/RT 새로고침 중...",
   "AT/RT 刷新完成：成功{success}个，失败{failed}个，跳过{skipped}个":

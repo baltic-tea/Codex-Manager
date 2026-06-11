@@ -7,8 +7,8 @@ const STATUS_FAILED: &str = "failed";
 const STATUS_INVALID_URL: &str = "invalid_url";
 const STATUS_OK: &str = "ok";
 const STATUS_RUNTIME_ERROR: &str = "runtime_error";
-const PROXY_TEST_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-const PROXY_TEST_TOTAL_TIMEOUT: Duration = Duration::from_secs(10);
+const PROXY_TEST_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const PROXY_TEST_TOTAL_TIMEOUT: Duration = Duration::from_secs(20);
 const DEFAULT_PROXY_TEST_TARGETS: &[&str] = &[
     "https://www.gstatic.com/generate_204",
     "https://api.ipify.org",

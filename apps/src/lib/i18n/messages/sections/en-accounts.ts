@@ -3,7 +3,7 @@
 import type { MessageCatalog } from "../types";
 
 export const EN_ACCOUNTS_MESSAGES: MessageCatalog = {
-  "5h 容量覆盖（Token）": "5h capacity override (tokens)",
+"5h 容量覆盖（Token）": "5h capacity override (tokens)",
   "7d 容量覆盖（Token）": "7d capacity override (tokens)",
   "AT/RT 刷新中...": "Refreshing AT/RT...",
   "AT/RT 刷新完成：成功{success}个，失败{failed}个，跳过{skipped}个":

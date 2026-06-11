@@ -10,7 +10,7 @@ pub(crate) const STATUS_INVALID_URL: &str = "invalid_url";
 pub(crate) const ENV_ACCOUNT_PROXY_DEBUG: &str = "CODEXMANAGER_ACCOUNT_PROXY_DEBUG";
 #[cfg(test)]
 pub(crate) const STATUS_RUNTIME_ERROR: &str = "runtime_error";
-const LOCAL_PROXY_EXPECTED_MESSAGE: &str = "Codex-Manager expects a local HTTP/SOCKS proxy URL. Start sing-box separately and paste the local mixed inbound address, for example http://127.0.0.1:7891.";
+const LOCAL_PROXY_EXPECTED_MESSAGE: &str = "Codex-Manager supports HTTP, HTTPS, SOCKS4, and SOCKS5 proxy URLs, for example http://host:port or socks5://host:port. For sing-box, paste the local mixed inbound address, e.g. http://127.0.0.1:7891.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AccountProxyMode {
@@ -309,8 +309,9 @@ pub(crate) fn normalize_supported_proxy_url(proxy_url: &str) -> Result<String, S
     let parsed = url::Url::parse(proxy_url)
         .map_err(|err| format!("invalid proxyUrl: {err}. {LOCAL_PROXY_EXPECTED_MESSAGE}"))?;
     match parsed.scheme() {
-        "http" | "https" | "socks5h" => Ok(proxy_url.trim().to_string()),
-        "socks5" => Ok(format!("socks5h:{}", &proxy_url.trim()["socks5:".len()..])),
+        "http" | "https" | "socks4" | "socks4a" | "socks5" | "socks5h" => {
+            Ok(proxy_url.trim().to_string())
+        }
         "vless" | "trojan" | "ss" | "hysteria2" => Err(LOCAL_PROXY_EXPECTED_MESSAGE.to_string()),
         other => Err(format!(
             "unsupported proxy URL scheme: {other}. {LOCAL_PROXY_EXPECTED_MESSAGE}"
