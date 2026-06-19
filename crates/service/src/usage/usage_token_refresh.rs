@@ -65,7 +65,7 @@ pub(crate) fn refresh_and_persist_access_token(
         crate::account_proxy::AccountProxyMode::Disabled => {
             refresh_access_token(issuer, &refresh_client_id, &token.refresh_token)
         }
-        crate::account_proxy::AccountProxyMode::Explicit { proxy_url } => {
+        crate::account_proxy::AccountProxyMode::Explicit { proxy_url, .. } => {
             refresh_access_token_with_explicit_proxy(
                 issuer,
                 &refresh_client_id,

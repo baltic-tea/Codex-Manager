@@ -12,7 +12,8 @@ static UPSTREAM_CLIENT: OnceLock<RwLock<Client>> = OnceLock::new();
 static UPSTREAM_CLIENT_POOL: OnceLock<RwLock<UpstreamClientPool>> = OnceLock::new();
 static ACCOUNT_PROXY_CLIENTS: OnceLock<RwLock<HashMap<String, AccountProxyClientCacheEntry>>> =
     OnceLock::new();
-static RUNTIME_CONFIG_LOADED: OnceLock<()> = OnceLock::new();
+static CONFIG_LOAD_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static CONFIG_IS_LOADED: AtomicBool = AtomicBool::new(false);
 static REQUEST_GATE_WAIT_TIMEOUT_MS: AtomicU64 =
     AtomicU64::new(DEFAULT_REQUEST_GATE_WAIT_TIMEOUT_MS);
 static TRACE_BODY_PREVIEW_MAX_BYTES: AtomicUsize =
@@ -1394,6 +1395,7 @@ pub(super) fn reload_from_env() {
     drop(cached_residency);
 
     refresh_upstream_clients_from_runtime_config();
+    CONFIG_IS_LOADED.store(true, Ordering::Release);
 }
 
 /// 函数 `ensure_runtime_config_loaded`
@@ -1408,7 +1410,12 @@ pub(super) fn reload_from_env() {
 /// # 返回
 /// 无
 fn ensure_runtime_config_loaded() {
-    let _ = RUNTIME_CONFIG_LOADED.get_or_init(|| reload_from_env());
+    if !CONFIG_IS_LOADED.load(Ordering::Acquire) {
+        let _guard = CONFIG_LOAD_MUTEX.lock().unwrap();
+        if !CONFIG_IS_LOADED.load(Ordering::Acquire) {
+            reload_from_env();
+        }
+    }
 }
 
 /// 函数 `upstream_client_lock`
@@ -1770,35 +1777,21 @@ fn load_account_proxy_client_cache_entry_from_storage(
     storage: &Storage,
     account_id: &str,
 ) -> AccountProxyClientCacheEntry {
-    let settings = match storage.find_account_proxy_settings(account_id) {
-        Ok(settings) => settings,
-        Err(err) => {
-            log::warn!(
-                "event=gateway_account_proxy_settings_read_failed account_id={} err={}",
-                account_id,
-                err
-            );
-            return AccountProxyClientCacheEntry::NotConfigured;
-        }
-    };
-    let Some(settings) = settings else {
-        return AccountProxyClientCacheEntry::NotConfigured;
-    };
-    if !settings.enabled {
-        return AccountProxyClientCacheEntry::NotConfigured;
-    }
-    let Some(proxy_url) = settings
-        .proxy_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-    else {
-        return AccountProxyClientCacheEntry::Invalid {
-            proxy_url: String::new(),
-            error: "missing proxy URL".to_string(),
+    let proxy_url =
+        match crate::account_proxy::resolve_account_proxy_mode_from_storage(storage, account_id) {
+            crate::account_proxy::AccountProxyMode::Disabled => {
+                return AccountProxyClientCacheEntry::NotConfigured;
+            }
+            crate::account_proxy::AccountProxyMode::Invalid {
+                proxy_url, error, ..
+            } => {
+                return AccountProxyClientCacheEntry::Invalid {
+                    proxy_url: proxy_url.unwrap_or_default(),
+                    error,
+                };
+            }
+            crate::account_proxy::AccountProxyMode::Explicit { proxy_url, .. } => proxy_url,
         };
-    };
 
     let normalized_proxy_url = match normalize_upstream_proxy_url(Some(proxy_url.as_str())) {
         Ok(Some(proxy_url)) => proxy_url,

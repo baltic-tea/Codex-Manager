@@ -1,15 +1,12 @@
 use reqwest::blocking::Client;
-use reqwest::Proxy;
 use serde::Deserialize;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use url::{Host, Url};
 
 const STATUS_FAILED: &str = "failed";
 const STATUS_INVALID_URL: &str = "invalid_url";
 const STATUS_OK: &str = "ok";
 const STATUS_RUNTIME_ERROR: &str = "runtime_error";
-const PROXY_TEST_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-const PROXY_TEST_TOTAL_TIMEOUT: Duration = Duration::from_secs(20);
 const IPWHOIS_ENDPOINT: &str = "https://ipwho.is/";
 const DEFAULT_PROXY_GEO_PROVIDER: &str = "ipwhois";
 const ENV_PROXY_GEO_PROVIDER: &str = "CODEXMANAGER_PROXY_GEO_PROVIDER";
@@ -130,20 +127,24 @@ fn check_account_proxy_with_options<'a>(
     accept_invalid_certs: bool,
     cached_flag_lookup: &(dyn Fn(&str) -> Option<String> + 'a),
 ) -> ProxyHealthCheckResult {
-    let (client, parsed_proxy_url) = match build_proxy_test_client(proxy_url, accept_invalid_certs)
-    {
-        Ok(result) => result,
-        Err(err) => {
-            return ProxyHealthCheckResult {
-                status: STATUS_INVALID_URL,
-                latency_ms: None,
-                last_error: Some(err),
-                geo: None,
-            };
-        }
-    };
+    let (client, context) =
+        match crate::account::proxy_testing::client::build_blocking_proxy_test_client(
+            proxy_url,
+            crate::account::proxy_testing::client::ProxyTestRedirectPolicy::Limited(10),
+            accept_invalid_certs,
+        ) {
+            Ok(result) => result,
+            Err(err) => {
+                return ProxyHealthCheckResult {
+                    status: STATUS_INVALID_URL,
+                    latency_ms: None,
+                    last_error: Some(err.message),
+                    geo: None,
+                };
+            }
+        };
 
-    let mut geo_error = match check_proxy_geo(&client, cached_flag_lookup) {
+    let mut geo_error = match check_proxy_geo(&client, proxy_url, cached_flag_lookup) {
         Ok((geo, latency_ms)) => {
             return ProxyHealthCheckResult {
                 status: STATUS_OK,
@@ -178,15 +179,27 @@ fn check_account_proxy_with_options<'a>(
                 ));
             }
             Err(err) => {
-                if looks_like_local_proxy_runtime_error(&parsed_proxy_url, &err) {
+                let mapped = crate::account::proxy_testing::errors::map_proxy_test_reqwest_error(
+                    "proxy test GET",
+                    proxy_url,
+                    err,
+                );
+                if looks_like_local_proxy_runtime_error(&context.parsed_proxy_url, &mapped) {
                     return ProxyHealthCheckResult {
                         status: STATUS_RUNTIME_ERROR,
                         latency_ms: None,
-                        last_error: Some(format!("local proxy runtime unavailable: {err}")),
+                        last_error: Some(format!(
+                            "local proxy runtime unavailable: {}",
+                            mapped.message
+                        )),
                         geo: geo_error.take().map(ProxyGeoInfo::error),
                     };
                 }
-                last_error = Some(format!("proxy test GET {target} failed: {err}"));
+                last_error = Some(format!(
+                    "proxy test GET {target} failed [{}]: {}",
+                    mapped.code.as_str(),
+                    mapped.message
+                ));
             }
         }
     }
@@ -224,23 +237,29 @@ fn proxy_geo_endpoint() -> String {
 
 fn check_proxy_geo<'a>(
     client: &Client,
+    proxy_url: &str,
     cached_flag_lookup: &(dyn Fn(&str) -> Option<String> + 'a),
 ) -> Result<(ProxyGeoInfo, i64), String> {
     match proxy_geo_provider().as_str() {
-        "ipwhois" => check_ipwhois_geo(client, cached_flag_lookup),
+        "ipwhois" => check_ipwhois_geo(client, proxy_url, cached_flag_lookup),
         other => Err(format!("unsupported proxy geo provider: {other}")),
     }
 }
 
 fn check_ipwhois_geo<'a>(
     client: &Client,
+    proxy_url: &str,
     cached_flag_lookup: &(dyn Fn(&str) -> Option<String> + 'a),
 ) -> Result<(ProxyGeoInfo, i64), String> {
     let started_at = Instant::now();
-    let response = client
-        .get(proxy_geo_endpoint())
-        .send()
-        .map_err(|err| format!("ipwho.is request failed: {err}"))?;
+    let response = client.get(proxy_geo_endpoint()).send().map_err(|err| {
+        let mapped = crate::account::proxy_testing::errors::map_proxy_test_reqwest_error(
+            "ipwho.is request",
+            proxy_url,
+            err,
+        );
+        format!("[{}] {}", mapped.code.as_str(), mapped.message)
+    })?;
 
     let status = response.status();
     if !status.is_success() {
@@ -327,33 +346,22 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
         .filter(|text| !text.is_empty())
 }
 
-fn build_proxy_test_client(
-    proxy_url: &str,
-    accept_invalid_certs: bool,
-) -> Result<(Client, Url), String> {
-    let parsed = Url::parse(proxy_url)
-        .map_err(|err| format!("invalid proxyUrl: {err}. Check the local HTTP/SOCKS proxy URL."))?;
-    let proxy = Proxy::all(proxy_url)
-        .map_err(|err| format!("invalid proxyUrl: {err}. Check the local HTTP/SOCKS proxy URL."))?;
-    let client = Client::builder()
-        .connect_timeout(PROXY_TEST_CONNECT_TIMEOUT)
-        .timeout(PROXY_TEST_TOTAL_TIMEOUT)
-        .danger_accept_invalid_certs(accept_invalid_certs)
-        .user_agent(crate::gateway::current_codex_user_agent())
-        .proxy(proxy)
-        .build()
-        .map_err(|err| format!("build proxy test client failed: {err}"))?;
-    Ok((client, parsed))
-}
-
-fn looks_like_local_proxy_runtime_error(proxy_url: &Url, err: &reqwest::Error) -> bool {
+fn looks_like_local_proxy_runtime_error(
+    proxy_url: &Url,
+    error: &crate::account::proxy_testing::errors::ProxyTestError,
+) -> bool {
     if !is_loopback_proxy_url(proxy_url) {
         return false;
     }
-    if err.is_connect() || err.is_timeout() {
-        return true;
+    match error.code {
+        crate::account::proxy_testing::errors::ProxyTestErrorCode::ProxyConnectTimeout
+        | crate::account::proxy_testing::errors::ProxyTestErrorCode::ProxyConnectFailed
+        | crate::account::proxy_testing::errors::ProxyTestErrorCode::ProxyTunnelFailed => {
+            return true;
+        }
+        _ => {}
     }
-    let message = err.to_string().to_ascii_lowercase();
+    let message = error.message.to_ascii_lowercase();
     message.contains("connection refused")
         || message.contains("unsuccessful tunnel")
         || message.contains("tcp connect error")

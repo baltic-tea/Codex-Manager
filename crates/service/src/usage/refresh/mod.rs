@@ -663,7 +663,7 @@ fn refresh_account_snapshot(
             crate::account_proxy::AccountProxyMode::Disabled => {
                 fetch_account_subscription(base_url, bearer, subscription_account_id, workspace_id)?
             }
-            crate::account_proxy::AccountProxyMode::Explicit { proxy_url } => {
+            crate::account_proxy::AccountProxyMode::Explicit { proxy_url, .. } => {
                 fetch_account_subscription_with_explicit_proxy(
                     base_url,
                     bearer,
@@ -693,7 +693,7 @@ fn refresh_account_snapshot(
         crate::account_proxy::AccountProxyMode::Disabled => {
             fetch_usage_snapshot(base_url, bearer, workspace_id)?
         }
-        crate::account_proxy::AccountProxyMode::Explicit { proxy_url } => {
+        crate::account_proxy::AccountProxyMode::Explicit { proxy_url, .. } => {
             fetch_usage_snapshot_with_explicit_proxy(base_url, bearer, workspace_id, proxy_url)?
         }
         crate::account_proxy::AccountProxyMode::Invalid { error, .. } => {

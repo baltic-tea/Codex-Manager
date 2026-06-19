@@ -1,8 +1,9 @@
 use codexmanager_core::{
     rpc::types::{AccountListResult, AccountSummary},
     storage::{
-        Account, AccountMetadata, AccountProxySettings, AccountQuotaCapacityOverride,
-        AccountSubscription, Token, UsageSnapshotRecord,
+        derive_proxy_profile_url_metadata, Account, AccountMetadata, AccountProxySettings,
+        AccountQuotaCapacityOverride, AccountSubscription, ProxyProfile, Token,
+        UsageSnapshotRecord,
     },
 };
 use std::collections::HashMap;
@@ -50,6 +51,7 @@ struct AccountSummarySetup {
     model_slugs_by_account: HashMap<String, Vec<String>>,
     quota_overrides: HashMap<String, AccountQuotaCapacityOverride>,
     proxy_settings: HashMap<String, AccountProxySettings>,
+    proxy_profiles: HashMap<String, ProxyProfile>,
 }
 
 impl From<&Account> for AccountSummaryParts {
@@ -158,6 +160,9 @@ fn to_account_summary_with_reason(
         quota_capacity_primary_window_tokens,
         quota_capacity_secondary_window_tokens,
         proxy_enabled: None,
+        proxy_source: None,
+        proxy_profile_id: None,
+        proxy_profile_name: None,
         proxy_status: None,
         proxy_url: None,
         proxy_ip: None,
@@ -272,6 +277,21 @@ fn load_account_summary_setup(
         .into_iter()
         .map(|item| (item.account_id.clone(), item))
         .collect::<HashMap<String, AccountProxySettings>>();
+    let proxy_profile_ids = proxy_settings
+        .values()
+        .filter_map(|item| item.proxy_profile_id.clone())
+        .collect::<Vec<_>>();
+    let proxy_profiles = if proxy_profile_ids.is_empty() {
+        HashMap::new()
+    } else {
+        storage
+            .list_proxy_profiles()
+            .map_err(|err| format!("load proxy profiles failed: {err}"))?
+            .into_iter()
+            .filter(|profile| proxy_profile_ids.iter().any(|id| id == &profile.id))
+            .map(|profile| (profile.id.clone(), profile))
+            .collect::<HashMap<String, ProxyProfile>>()
+    };
 
     Ok(AccountSummarySetup {
         preferred_account_id,
@@ -283,6 +303,7 @@ fn load_account_summary_setup(
         model_slugs_by_account,
         quota_overrides,
         proxy_settings,
+        proxy_profiles,
     })
 }
 
@@ -313,6 +334,7 @@ where
                 &setup.model_slugs_by_account,
                 &setup.quota_overrides,
                 &setup.proxy_settings,
+                &setup.proxy_profiles,
             )
         })
         .collect()
@@ -344,6 +366,7 @@ fn map_account_summary<A>(
     model_slugs_by_account: &HashMap<String, Vec<String>>,
     quota_overrides: &HashMap<String, AccountQuotaCapacityOverride>,
     proxy_settings: &HashMap<String, AccountProxySettings>,
+    proxy_profiles: &HashMap<String, ProxyProfile>,
 ) -> AccountSummary
 where
     A: Into<AccountSummaryParts>,
@@ -403,23 +426,69 @@ where
     );
 
     if let Some(proxy) = proxy_setting {
+        let proxy_source = proxy.proxy_source.clone().unwrap_or_else(|| {
+            if proxy
+                .proxy_profile_id
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+            {
+                "profile".to_string()
+            } else {
+                "custom".to_string()
+            }
+        });
+        let proxy_profile = proxy
+            .proxy_profile_id
+            .as_ref()
+            .and_then(|id| proxy_profiles.get(id));
         summary.proxy_enabled = Some(proxy.enabled);
-        summary.proxy_status = Some(proxy.status.clone());
-        summary.proxy_url = proxy.proxy_url.clone();
-        summary.proxy_ip = proxy.ip.clone();
-        summary.proxy_country_code = proxy.country_code.clone();
-        summary.proxy_country_name = proxy.country_name.clone();
-        summary.proxy_region_name = proxy.region_name.clone();
-        summary.proxy_city_name = proxy.city_name.clone();
-        summary.proxy_geo_checked_at = proxy.geo_checked_at;
-        summary.proxy_asn = proxy.asn;
-        summary.proxy_as_org = proxy.as_org.clone();
-        summary.proxy_isp = proxy.isp.clone();
-        summary.proxy_as_domain = proxy.as_domain.clone();
-        summary.proxy_timezone_id = proxy.timezone_id.clone();
-        summary.proxy_timezone_utc = proxy.timezone_utc.clone();
-        summary.proxy_flag_img_url = proxy.flag_img_url.clone();
-        summary.proxy_flag_emoji = proxy.flag_emoji.clone();
+        summary.proxy_source = Some(proxy_source.clone());
+        summary.proxy_profile_id = proxy.proxy_profile_id.clone();
+        summary.proxy_profile_name = proxy_profile.map(|profile| profile.name.clone());
+        summary.proxy_url = Some(match proxy_source.as_str() {
+            "profile" => proxy_profile
+                .map(|profile| profile.proxy_url_redacted.clone())
+                .unwrap_or_else(|| "<missing>".to_string()),
+            _ => proxy
+                .proxy_url
+                .as_deref()
+                .map(|value| derive_proxy_profile_url_metadata(value).proxy_url_redacted)
+                .unwrap_or_default(),
+        });
+        if proxy_source == "profile" && proxy_profile.is_some() {
+            let p = proxy_profile.unwrap();
+            summary.proxy_status = Some(p.status.clone());
+            summary.proxy_ip = p.ip.clone();
+            summary.proxy_country_code = p.country_code.clone();
+            summary.proxy_country_name = p.country_name.clone();
+            summary.proxy_region_name = p.region_name.clone();
+            summary.proxy_city_name = p.city_name.clone();
+            summary.proxy_geo_checked_at = p.last_tested_at;
+            summary.proxy_asn = p.asn;
+            summary.proxy_as_org = p.as_org.clone();
+            summary.proxy_isp = None;
+            summary.proxy_as_domain = None;
+            summary.proxy_timezone_id = p.timezone_id.clone();
+            summary.proxy_timezone_utc = p.timezone_utc.clone();
+            summary.proxy_flag_img_url = p.flag_img_url.clone();
+            summary.proxy_flag_emoji = p.flag_emoji.clone();
+        } else {
+            summary.proxy_status = Some(proxy.status.clone());
+            summary.proxy_ip = proxy.ip.clone();
+            summary.proxy_country_code = proxy.country_code.clone();
+            summary.proxy_country_name = proxy.country_name.clone();
+            summary.proxy_region_name = proxy.region_name.clone();
+            summary.proxy_city_name = proxy.city_name.clone();
+            summary.proxy_geo_checked_at = proxy.geo_checked_at;
+            summary.proxy_asn = proxy.asn;
+            summary.proxy_as_org = proxy.as_org.clone();
+            summary.proxy_isp = proxy.isp.clone();
+            summary.proxy_as_domain = proxy.as_domain.clone();
+            summary.proxy_timezone_id = proxy.timezone_id.clone();
+            summary.proxy_timezone_utc = proxy.timezone_utc.clone();
+            summary.proxy_flag_img_url = proxy.flag_img_url.clone();
+            summary.proxy_flag_emoji = proxy.flag_emoji.clone();
+        }
     }
 
     summary

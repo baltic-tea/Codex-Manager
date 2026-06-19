@@ -1534,15 +1534,17 @@ pub(crate) fn log_account_data_route(
                 ("legacy", "system_proxy_possible", "-".to_string(), false)
             }
         }
-        crate::account_proxy::AccountProxyMode::Explicit { proxy_url } => (
+        crate::account_proxy::AccountProxyMode::Explicit { proxy_url, source } => (
             "explicit_account_proxy",
-            "explicit_account_proxy",
+            source.as_str(),
             crate::account_proxy::redact_proxy_url_for_log(proxy_url),
             true,
         ),
-        crate::account_proxy::AccountProxyMode::Invalid { proxy_url, .. } => (
+        crate::account_proxy::AccountProxyMode::Invalid {
+            proxy_url, source, ..
+        } => (
             "invalid",
-            "explicit_account_proxy",
+            source.as_str(),
             proxy_url
                 .as_deref()
                 .map(crate::account_proxy::redact_proxy_url_for_log)

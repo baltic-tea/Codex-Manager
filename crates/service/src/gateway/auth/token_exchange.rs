@@ -281,7 +281,7 @@ pub(super) fn resolve_openai_bearer_token(
                     crate::account_proxy::AccountProxyMode::Disabled => {
                         refresh_access_token(&issuer, &client_id, &token.refresh_token)
                     }
-                    crate::account_proxy::AccountProxyMode::Explicit { proxy_url } => {
+                    crate::account_proxy::AccountProxyMode::Explicit { proxy_url, .. } => {
                         refresh_access_token_with_explicit_proxy(
                             &issuer,
                             &client_id,

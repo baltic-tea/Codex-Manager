@@ -349,7 +349,7 @@ pub(crate) fn refresh_current_chatgpt_auth_tokens(
             &chatgpt_account_id,
             workspace_id.as_deref(),
         )?,
-        crate::account_proxy::AccountProxyMode::Explicit { proxy_url } => {
+        crate::account_proxy::AccountProxyMode::Explicit { proxy_url, .. } => {
             fetch_account_subscription_with_explicit_proxy(
                 &base_url,
                 &token.access_token,
