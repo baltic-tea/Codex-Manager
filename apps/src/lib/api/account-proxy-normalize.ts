@@ -4,6 +4,9 @@ import { normalizeCountryCode } from "@/lib/utils/proxy-geo";
 export type AccountProxySummaryFields = Pick<
   Account,
   | "proxyEnabled"
+  | "proxySource"
+  | "proxyProfileId"
+  | "proxyProfileName"
   | "proxyStatus"
   | "proxyUrl"
   | "proxyIp"
@@ -51,6 +54,11 @@ export function normalizeAccountProxySummaryFields(
 ): AccountProxySummaryFields {
   return {
     proxyEnabled: toNullableBoolean(source.proxyEnabled ?? source.proxy_enabled),
+    proxySource: asString(source.proxySource ?? source.proxy_source) || null,
+    proxyProfileId:
+      asString(source.proxyProfileId ?? source.proxy_profile_id) || null,
+    proxyProfileName:
+      asString(source.proxyProfileName ?? source.proxy_profile_name) || null,
     proxyStatus: asString(source.proxyStatus ?? source.proxy_status) || null,
     proxyUrl: asString(source.proxyUrl ?? source.proxy_url) || null,
     proxyIp: asString(source.proxyIp ?? source.proxy_ip) || null,

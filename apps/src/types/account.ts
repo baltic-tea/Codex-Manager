@@ -45,6 +45,9 @@ export interface Account {
    * "not configured" in UI components.
    */
   proxyEnabled?: boolean | null;
+  proxySource?: string | null;
+  proxyProfileId?: string | null;
+  proxyProfileName?: string | null;
   proxyStatus?: string | null;
   proxyUrl?: string | null;
   proxyIp?: string | null;

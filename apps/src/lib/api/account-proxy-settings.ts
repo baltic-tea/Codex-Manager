@@ -1,11 +1,20 @@
 import type { ProxyGeoLike } from "@/lib/utils/proxy-geo";
 
+export type AccountProxySource = "custom" | "profile";
+
 export interface AccountProxySettings extends ProxyGeoLike {
   accountId: string;
   enabled: boolean;
+  source: AccountProxySource;
+  proxyProfileId: string | null;
+  proxyProfileName: string | null;
+  proxyProfileEnabled: boolean | null;
   proxyUrl: string;
+  proxyUrlRedacted: string;
   status: string;
   latencyMs: number | null;
+  lastDownloadMbps: number | null;
+  lastUploadMbps: number | null;
   lastCheckAt: number | null;
   lastError: string | null;
 }
@@ -13,6 +22,8 @@ export interface AccountProxySettings extends ProxyGeoLike {
 export interface AccountProxySetPayload {
   accountId: string;
   enabled: boolean;
+  source?: AccountProxySource | null;
+  proxyProfileId?: string | null;
   proxyUrl?: string | null;
   status?: string | null;
   latencyMs?: number | null;
@@ -29,6 +40,8 @@ export interface AccountProxySetPayload {
 export interface AccountProxyTestPayload {
   accountId: string;
   enabled?: boolean;
+  source?: AccountProxySource | null;
+  proxyProfileId?: string | null;
   proxyUrl?: string | null;
 }
 
@@ -74,9 +87,29 @@ export function readAccountProxySettings(payload: unknown): AccountProxySettings
   return {
     accountId: readString(source.accountId ?? source.account_id),
     enabled: Boolean(source.enabled),
+    source:
+      readString(source.source).toLowerCase() === "profile" ? "profile" : "custom",
+    proxyProfileId: readNullableString(
+      source.proxyProfileId ?? source.proxy_profile_id,
+    ),
+    proxyProfileName: readNullableString(
+      source.proxyProfileName ?? source.proxy_profile_name,
+    ),
+    proxyProfileEnabled: readNullableBoolean(
+      source.proxyProfileEnabled ?? source.proxy_profile_enabled,
+    ),
     proxyUrl: readString(source.proxyUrl ?? source.proxy_url),
+    proxyUrlRedacted:
+      readString(source.proxyUrlRedacted ?? source.proxy_url_redacted) ||
+      "<invalid>",
     status: readString(source.status || "not_configured"),
     latencyMs: readNumber(source.latencyMs ?? source.latency_ms),
+    lastDownloadMbps: readNumber(
+      source.lastDownloadMbps ?? source.last_download_mbps,
+    ),
+    lastUploadMbps: readNumber(
+      source.lastUploadMbps ?? source.last_upload_mbps,
+    ),
     lastCheckAt: readNumber(source.lastCheckAt ?? source.last_check_at),
     lastError:
       source.lastError == null && source.last_error == null

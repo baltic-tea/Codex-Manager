@@ -39,6 +39,24 @@ import {
 	PluginCatalogTask,
 	PluginRunLogSummary,
 	PluginTaskSummary,
+	ProxyProfile,
+	ProxyProfileListResult,
+	ProxyTestPresetsResult,
+	ProxyTestJobState,
+	CfStyleResult,
+	CfStyleStatus,
+	ThroughputDirection,
+	CfStyleRunStatus,
+	CfStyleThroughputResult,
+	ProxyProfileUrlTestResult,
+
+	ProxyProfileUrlTestListResult,
+	ProxySpeedTestListResult,
+	ProxySpeedTestEntry,
+	ProxyDiagnosticTestListResult,
+	ProxyDiagnosticTestEntry,
+	AccountProxyUrlTestListResult,
+	AccountProxyUrlTestEntry,
 	RequestLog,
 	RequestLogFilterSummary,
 	RequestLogListResult,
@@ -1747,6 +1765,284 @@ export function normalizeRequestLogFilterSummary(
 	};
 }
 
+export function normalizeProxyProfile(payload: unknown): ProxyProfile {
+	const source = asObject(payload);
+	return {
+		id: asString(source.id),
+		name: asString(source.name),
+		proxyUrlRedacted:
+			asString(source.proxyUrlRedacted ?? source.proxy_url_redacted) || "<invalid>",
+		scheme: asString(source.scheme) || null,
+		host: asString(source.host) || null,
+		port: toNullableNumber(source.port),
+		enabled: asBoolean(source.enabled, true),
+		status: asString(source.status) || "unchecked",
+		lastError: asString(source.lastError ?? source.last_error) || null,
+		lastUrlLatencyMs: toNullableNumber(
+			source.lastUrlLatencyMs ?? source.last_url_latency_ms,
+		),
+		lastDownloadMbps: toNullableNumber(
+			source.lastDownloadMbps ?? source.last_download_mbps,
+		),
+		lastUploadMbps: toNullableNumber(
+			source.lastUploadMbps ?? source.last_upload_mbps,
+		),
+		lastTestedAt: toNullableNumber(source.lastTestedAt ?? source.last_tested_at),
+		ip: asString(source.ip) || null,
+		countryCode: asString(source.countryCode ?? source.country_code) || null,
+		countryName: asString(source.countryName ?? source.country_name) || null,
+		regionName: asString(source.regionName ?? source.region_name) || null,
+		cityName: asString(source.cityName ?? source.city_name) || null,
+		geoCheckedAt: toNullableNumber(source.lastTestedAt ?? source.last_tested_at),
+		geoError: asString(source.lastError ?? source.last_error) || null,
+		asn: toNullableNumber(source.asn),
+		asOrg: asString(source.asOrg ?? source.as_org) || null,
+		isp: asString(source.isp) || null,
+		asDomain: asString(source.asDomain ?? source.as_domain) || null,
+		tagsJson: asString(source.tagsJson ?? source.tags_json) || null,
+		notes: asString(source.notes) || null,
+		flagImgUrl: asString(source.flagImgUrl ?? source.flag_img_url) || null,
+		flagEmoji: asString(source.flagEmoji ?? source.flag_emoji) || null,
+		timezoneId: asString(source.timezoneId ?? source.timezone_id) || null,
+		timezoneOffset: toNullableNumber(source.timezoneOffset ?? source.timezone_offset),
+		timezoneUtc: asString(source.timezoneUtc ?? source.timezone_utc) || null,
+		accountsCount: toNullableNumber(source.accountsCount ?? source.accounts_count) ?? null,
+		createdAt: asInteger(source.createdAt ?? source.created_at, 0, 0),
+		updatedAt: asInteger(source.updatedAt ?? source.updated_at, 0, 0),
+	};
+}
+
+export function normalizeProxyProfileListResult(
+	payload: unknown,
+): ProxyProfileListResult {
+	const source = asObject(payload);
+	const items = asArray(source.items ?? payload).map((item) =>
+		normalizeProxyProfile(item),
+	);
+	return { items };
+}
+
+export function normalizeProxyTestPresetsResult(
+	payload: unknown,
+): ProxyTestPresetsResult {
+	const source = asObject(payload);
+	const defaults = asObject(source.defaults);
+	const uploadEp = asObject(source.uploadEndpoint ?? source.upload_endpoint);
+	return {
+		speedProviders: asArray(source.speedProviders ?? source.speed_providers).map(
+			(item) => {
+				const provider = asObject(item);
+				return {
+					id: asString(provider.id),
+					label: asString(provider.label),
+					providerFamily: asString(provider.providerFamily ?? provider.provider_family),
+					files: asArray(provider.files).map((fileItem) => {
+						const f = asObject(fileItem);
+						return {
+							fileSizeId: asString(f.fileSizeId ?? f.file_size_id),
+							downloadUrl: asString(f.downloadUrl ?? f.download_url),
+							readLimitBytes: toNullableNumber(f.readLimitBytes ?? f.read_limit_bytes),
+						};
+					}),
+				};
+			},
+		),
+		fileSizes: asArray(source.fileSizes ?? source.file_sizes).map(
+			(item) => {
+				const fs = asObject(item);
+				return {
+					id: asString(fs.id),
+					label: asString(fs.label),
+					bytes: asInteger(fs.bytes, 0, 0),
+					warning: asBoolean(fs.warning, false),
+				};
+			},
+		),
+		defaults: {
+			speedProviderId: asString(
+				defaults.speedProviderId ?? defaults.speed_provider_id,
+			),
+			fileSizeId: asString(defaults.fileSizeId ?? defaults.file_size_id),
+			latencyPresetId: asString(
+				defaults.latencyPresetId ?? defaults.latency_preset_id,
+			),
+		},
+		uploadEndpoint: {
+			status: asString(uploadEp.status),
+			configured: asBoolean(uploadEp.configured, false),
+			source: asString(uploadEp.source),
+			url: asString(uploadEp.url) || null,
+		},
+	};
+}
+
+
+export function normalizeProxyProfileUrlTestResult(
+	payload: unknown,
+): ProxyProfileUrlTestResult {
+	const source = asObject(payload);
+	return {
+		id: asInteger(source.id, 0, 0),
+		proxyProfileId:
+			asString(source.proxyProfileId ?? source.proxy_profile_id) || "",
+		status: asString(source.status) || "failed",
+		urlLatencyMs: toNullableNumber(
+			source.urlLatencyMs ?? source.url_latency_ms,
+		),
+		statusCode: toNullableNumber(source.statusCode ?? source.status_code),
+		testUrl: asString(source.testUrl ?? source.test_url),
+		finalUrl: asString(source.finalUrl ?? source.final_url) || null,
+		redirected: asBoolean(source.redirected, false),
+		testedAt: asInteger(source.testedAt ?? source.tested_at, 0, 0),
+		errorCode: asString(source.errorCode ?? source.error_code) || null,
+		error: asString(source.error) || null,
+	};
+}
+
+export function normalizeProxyProfileUrlTestListResult(payload: unknown): ProxyProfileUrlTestListResult {
+	const source = asObject(payload);
+	const items = asArray(source.items ?? payload).map(normalizeProxyProfileUrlTestResult);
+	return { items };
+}
+
+function normalizeCfStyleThroughput(raw: any): CfStyleThroughputResult | null {
+	if (!raw) return null;
+	const obj = asObject(raw) as any;
+
+	return {
+		direction: asString(obj.direction) as ThroughputDirection,
+		finalMbps: toNullableNumber(obj.finalMbps ?? obj.final_mbps) ?? 0,
+		rawFinalMbps: toNullableNumber(obj.rawFinalMbps ?? obj.raw_final_mbps) ?? 0,
+		adjustedFinalMbps: toNullableNumber(obj.adjustedFinalMbps ?? obj.adjusted_final_mbps) ?? 0,
+		avgMbps: toNullableNumber(obj.avgMbps ?? obj.avg_mbps) ?? 0,
+		medianMbps: toNullableNumber(obj.medianMbps ?? obj.median_mbps) ?? 0,
+		p90Mbps: toNullableNumber(obj.p90Mbps ?? obj.p90_mbps) ?? 0,
+		maxMbps: toNullableNumber(obj.maxMbps ?? obj.max_mbps) ?? 0,
+		totalBytes: asInteger(obj.totalBytes ?? obj.total_bytes, 0, 0),
+		totalDurationMs: asInteger(obj.totalDurationMs ?? obj.total_duration_ms, 0, 0),
+		runs: asArray(obj.runs).map((r: any) => ({
+			payloadBytes: asInteger(r.payloadBytes ?? r.payload_bytes, 0, 0),
+			transferredBytes: asInteger(r.transferredBytes ?? r.transferred_bytes, 0, 0),
+			totalDurationMs: asInteger(r.totalDurationMs ?? r.total_duration_ms, 0, 0),
+			ttfbMs: toNullableNumber(r.ttfbMs ?? r.ttfb_ms),
+			transferDurationMs: asInteger(r.transferDurationMs ?? r.transfer_duration_ms, 0, 0),
+			rawMbps: toNullableNumber(r.rawMbps ?? r.raw_mbps) ?? 0,
+			adjustedMbps: toNullableNumber(r.adjustedMbps ?? r.adjusted_mbps) ?? 0,
+			status: asString(r.status) as CfStyleRunStatus,
+			error: asString(r.error) || null,
+		})),
+	};
+}
+
+function normalizeCfStyleResult(raw: any): CfStyleResult | null {
+	if (!raw) return null;
+	const obj = asObject(raw) as any;
+
+	return {
+		status: asString(obj.status) as CfStyleStatus,
+		startedAt: asString(obj.startedAt ?? obj.started_at),
+		finishedAt: asString(obj.finishedAt ?? obj.finished_at),
+		durationMs: asInteger(obj.durationMs ?? obj.duration_ms, 0, 0),
+		errors: asArray(obj.errors).map((e: any) => ({
+			phase: asString(e.phase),
+			message: asString(e.message),
+		})),
+		endpointInfo: {
+			observedIp: asString(obj.endpointInfo?.observedIp ?? obj.endpoint_info?.observed_ip) || null,
+			observedCountry: asString(obj.endpointInfo?.observedCountry ?? obj.endpoint_info?.observed_country) || null,
+			observedColo: asString(obj.endpointInfo?.observedColo ?? obj.endpoint_info?.observed_colo) || null,
+		},
+		usedProxy: (obj.usedProxy ?? obj.used_proxy) ? {
+			proxyUrlRedacted: asString((obj.usedProxy ?? obj.used_proxy).proxyUrlRedacted ?? (obj.usedProxy ?? obj.used_proxy).proxy_url_redacted),
+			proxyScheme: asString((obj.usedProxy ?? obj.used_proxy).proxyScheme ?? (obj.usedProxy ?? obj.used_proxy).proxy_scheme),
+			dnsNote: asString((obj.usedProxy ?? obj.used_proxy).dnsNote ?? (obj.usedProxy ?? obj.used_proxy).dns_note),
+		} : null,
+		latency: obj.latency ? {
+			rawSamplesMs: asArray(obj.latency.rawSamplesMs ?? obj.latency.raw_samples_ms).map(v => toNullableNumber(v) ?? 0),
+			minMs: toNullableNumber(obj.latency.minMs ?? obj.latency.min_ms) ?? 0,
+			avgMs: toNullableNumber(obj.latency.avgMs ?? obj.latency.avg_ms) ?? 0,
+			medianMs: toNullableNumber(obj.latency.medianMs ?? obj.latency.median_ms) ?? 0,
+			p90Ms: toNullableNumber(obj.latency.p90Ms ?? obj.latency.p90_ms) ?? 0,
+			p95Ms: toNullableNumber(obj.latency.p95Ms ?? obj.latency.p95_ms) ?? 0,
+			jitterMs: toNullableNumber(obj.latency.jitterMs ?? obj.latency.jitter_ms) ?? 0,
+		} : null,
+		download: normalizeCfStyleThroughput(obj.download),
+		upload: normalizeCfStyleThroughput(obj.upload),
+	};
+}
+
+export function normalizeProxyTestJobState(payload: unknown): ProxyTestJobState {
+	const source = asObject(payload);
+	const downloadSummaryRaw = source.downloadSummary ?? source.download_summary;
+	const uploadSummaryRaw = source.uploadSummary ?? source.upload_summary;
+	return {
+		jobId: asString(source.jobId ?? source.job_id),
+		scope:
+			(asString(source.scope) as ProxyTestJobState["scope"]) || "system_proxy",
+		proxyProfileId:
+			asString(source.proxyProfileId ?? source.proxy_profile_id) || null,
+		accountId: asString(source.accountId ?? source.account_id) || null,
+		kind: (asString(source.kind) as ProxyTestJobState["kind"]) || "latency",
+		status:
+			(asString(source.status) as ProxyTestJobState["status"]) || "queued",
+		phase: (asString(source.phase) as ProxyTestJobState["phase"]) || "queued",
+		downloadedBytes: asInteger(
+			source.downloadedBytes ?? source.downloaded_bytes,
+			0,
+			0,
+		),
+		uploadedBytes: asInteger(
+			source.uploadedBytes ?? source.uploaded_bytes,
+			0,
+			0,
+		),
+		downloadMbps: toNullableNumber(
+			source.downloadMbps ?? source.download_mbps,
+		),
+		uploadMbps: toNullableNumber(source.uploadMbps ?? source.upload_mbps),
+		latencyMs: toNullableNumber(source.latencyMs ?? source.latency_ms),
+		startedAt: asInteger(source.startedAt ?? source.started_at, 0, 0),
+		updatedAt: asInteger(source.updatedAt ?? source.updated_at, 0, 0),
+		error: asString(source.error) || null,
+		observedIp: asString(source.observedIp ?? source.observed_ip) || null,
+		observedCountry: asString(source.observedCountry ?? source.observed_country) || null,
+		observedColo: asString(source.observedColo ?? source.observed_colo) || null,
+		downloadSamples: asArray(source.downloadSamples ?? source.download_samples).map((s: any) => ({
+			payloadBytes: asInteger(s.payloadBytes ?? s.payload_bytes, 0, 0),
+			durationMs: asInteger(s.durationMs ?? s.duration_ms, 0, 0),
+			mbps: toNullableNumber(s.mbps) ?? 0,
+		})),
+		uploadSamples: asArray(source.uploadSamples ?? source.upload_samples).map((s: any) => ({
+			payloadBytes: asInteger(s.payloadBytes ?? s.payload_bytes, 0, 0),
+			durationMs: asInteger(s.durationMs ?? s.duration_ms, 0, 0),
+			mbps: toNullableNumber(s.mbps) ?? 0,
+		})),
+		downloadSummary: downloadSummaryRaw ? {
+			median: toNullableNumber((downloadSummaryRaw as any).median) ?? 0,
+			average: toNullableNumber((downloadSummaryRaw as any).average) ?? 0,
+			p90: toNullableNumber((downloadSummaryRaw as any).p90) ?? 0,
+			best: toNullableNumber((downloadSummaryRaw as any).best) ?? 0,
+		} : null,
+		uploadSummary: uploadSummaryRaw ? {
+			median: toNullableNumber((uploadSummaryRaw as any).median) ?? 0,
+			average: toNullableNumber((uploadSummaryRaw as any).average) ?? 0,
+			p90: toNullableNumber((uploadSummaryRaw as any).p90) ?? 0,
+			best: toNullableNumber((uploadSummaryRaw as any).best) ?? 0,
+		} : null,
+		downloadDiagnostics: asArray(source.downloadDiagnostics ?? source.download_diagnostics).map((s: any) => ({
+			providerId: asString(s.providerId ?? s.provider_id),
+			fileSizeId: asString(s.fileSizeId ?? s.file_size_id),
+			status: asString(s.status),
+			error: asString(s.error) || null,
+			downloadedBytes: asInteger(s.downloadedBytes ?? s.downloaded_bytes, 0, 0),
+			durationMs: asInteger(s.durationMs ?? s.duration_ms, 0, 0),
+			mbps: toNullableNumber(s.mbps) ?? 0,
+		})),
+		cfStyleResult: normalizeCfStyleResult(source.cfStyleResult ?? source.cf_style_result),
+	};
+}
+
+
 /**
  * 函数 `normalizeBackgroundTasks`
  *
@@ -2058,4 +2354,80 @@ export function normalizeStartupSnapshot(payload: unknown): StartupSnapshot {
 		),
 		requestLogs: normalizeRequestLogs(source.requestLogs),
 	};
+}
+
+export function normalizeProxySpeedTestEntry(payload: unknown): ProxySpeedTestEntry {
+	const source = asObject(payload);
+	return {
+		id: asInteger(source.id, 0, 0),
+		scope: asString(source.scope) || "",
+		proxyProfileId: asString(source.proxyProfileId ?? source.proxy_profile_id) || null,
+		accountId: asString(source.accountId ?? source.account_id) || null,
+		status: asString(source.status) || "failed",
+		provider: asString(source.provider) || "",
+		observedIp: asString(source.observedIp ?? source.observed_ip) || null,
+		observedCountry: asString(source.observedCountry ?? source.observed_country) || null,
+		observedColo: asString(source.observedColo ?? source.observed_colo) || null,
+		maxPayloadBytes: toNullableNumber(source.maxPayloadBytes ?? source.max_payload_bytes),
+		samplesJson: asString(source.samplesJson ?? source.samples_json) || null,
+		downloadSummaryJson: asString(source.downloadSummaryJson ?? source.download_summary_json) || null,
+		uploadSummaryJson: asString(source.uploadSummaryJson ?? source.upload_summary_json) || null,
+		startedAt: asInteger(source.startedAt ?? source.started_at, 0, 0),
+		finishedAt: asInteger(source.finishedAt ?? source.finished_at, 0, 0),
+		errorCode: asString(source.errorCode ?? source.error_code) || null,
+		error: asString(source.error) || null,
+	};
+}
+
+export function normalizeProxySpeedTestListResult(payload: unknown): ProxySpeedTestListResult {
+	const source = asObject(payload);
+	const items = asArray(source.items ?? payload).map(normalizeProxySpeedTestEntry);
+	return { items };
+}
+
+export function normalizeProxyDiagnosticTestEntry(payload: unknown): ProxyDiagnosticTestEntry {
+	const source = asObject(payload);
+	return {
+		id: asInteger(source.id, 0, 0),
+		scope: asString(source.scope) || "",
+		proxyProfileId: asString(source.proxyProfileId ?? source.proxy_profile_id) || null,
+		accountId: asString(source.accountId ?? source.account_id) || null,
+		status: asString(source.status) || "failed",
+		provider: asString(source.provider) || "",
+		fileSizeId: asString(source.fileSizeId ?? source.file_size_id) || "",
+		downloadedBytes: toNullableNumber(source.downloadedBytes ?? source.downloaded_bytes),
+		durationMs: toNullableNumber(source.durationMs ?? source.duration_ms),
+		mbps: toNullableNumber(source.mbps),
+		testedAt: asInteger(source.testedAt ?? source.tested_at, 0, 0),
+		error: asString(source.error) || null,
+	};
+}
+
+export function normalizeProxyDiagnosticTestListResult(payload: unknown): ProxyDiagnosticTestListResult {
+	const source = asObject(payload);
+	const items = asArray(source.items ?? payload).map(normalizeProxyDiagnosticTestEntry);
+	return { items };
+}
+
+export function normalizeAccountProxyUrlTestEntry(payload: unknown): AccountProxyUrlTestEntry {
+	const source = asObject(payload);
+	return {
+		id: asInteger(source.id, 0, 0),
+		accountId: asString(source.accountId ?? source.account_id) || "",
+		status: asString(source.status) || "failed",
+		urlLatencyMs: toNullableNumber(source.urlLatencyMs ?? source.url_latency_ms),
+		statusCode: toNullableNumber(source.statusCode ?? source.status_code),
+		testUrl: asString(source.testUrl ?? source.test_url) || "",
+		finalUrl: asString(source.finalUrl ?? source.final_url) || null,
+		redirected: asBoolean(source.redirected, false),
+		testedAt: asInteger(source.testedAt ?? source.tested_at, 0, 0),
+		errorCode: asString(source.errorCode ?? source.error_code) || null,
+		error: asString(source.error) || null,
+	};
+}
+
+export function normalizeAccountProxyUrlTestListResult(payload: unknown): AccountProxyUrlTestListResult {
+	const source = asObject(payload);
+	const items = asArray(source.items ?? payload).map(normalizeAccountProxyUrlTestEntry);
+	return { items };
 }

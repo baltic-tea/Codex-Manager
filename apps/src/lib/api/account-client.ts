@@ -17,6 +17,10 @@ import {
 	normalizeManagedModelInfo,
 	normalizeManagedModelRouting,
 	normalizeModelCatalog,
+	normalizeProxyTestJobState,
+	normalizeProxySpeedTestListResult,
+	normalizeAccountProxyUrlTestListResult,
+	normalizeProxyDiagnosticTestListResult,
 	normalizeUsageAggregateSummary,
 	normalizeUsageList,
 	normalizeUsageSnapshot,
@@ -67,6 +71,10 @@ import {
 	ManagedModelSourceModel,
 	ModelCatalog,
 	ModelInfo,
+	ProxyTestJobState,
+	ProxySpeedTestListResult,
+	AccountProxyUrlTestListResult,
+	ProxyDiagnosticTestListResult,
 	UsageAggregateSummary,
 } from "../../types";
 
@@ -80,13 +88,44 @@ export interface AccountWarmupPayload {
 	message?: string;
 }
 
+export interface AccountProxyLatencyTestPayload {
+	accountId: string;
+}
+
+export interface CfStyleConfig {
+	downloadPreset?: "all" | "100kb" | "1mb" | "10mb" | "25mb" | null;
+	uploadPreset?: "all" | "100kb" | "1mb" | "10mb" | "25mb" | "50mb" | null;
+	timeoutSecs?: number;
+	runUpload?: boolean | null;
+}
+
+export interface AccountProxyCloudflareSpeedTestPayload {
+	accountId: string;
+	config?: CfStyleConfig | null;
+}
+
+export interface AccountProxySpeedTestPayload {
+
+	accountId: string;
+	providerId?: string | null;
+	fileSizeId?: string | null;
+	diagnosticProviderId?: string | null;
+	diagnosticFileSizeId?: string | null;
+}
+
 import {
+	type AccountProxySource,
 	readAccountProxySettings,
 	type AccountProxySettings,
 	type AccountProxySetPayload,
 	type AccountProxyTestPayload,
 } from "./account-proxy-settings";
-export type { AccountProxySettings, AccountProxySetPayload, AccountProxyTestPayload };
+export type {
+	AccountProxySettings,
+	AccountProxySetPayload,
+	AccountProxySource,
+	AccountProxyTestPayload,
+};
 
 export interface AccountDeleteByStatusesPayload {
 	statuses: string[];
@@ -540,6 +579,8 @@ export const accountClient = {
 				withAddr({
 					accountId: params.accountId,
 					enabled: params.enabled,
+					source: params.source ?? null,
+					proxyProfileId: params.proxyProfileId ?? null,
 					proxyUrl: params.proxyUrl ?? null,
 					status: params.status ?? null,
 					latencyMs: params.latencyMs ?? null,
@@ -572,8 +613,98 @@ export const accountClient = {
 				withAddr({
 					accountId: params.accountId,
 					enabled: params.enabled,
+					source: params.source ?? null,
+					proxyProfileId: params.proxyProfileId ?? null,
 					proxyUrl: params.proxyUrl ?? null,
 				}),
+			),
+		),
+	latencyTestProxy: async (
+		params: AccountProxyLatencyTestPayload,
+	): Promise<ProxyTestJobState> =>
+		normalizeProxyTestJobState(
+			await invoke<unknown>(
+				"service_account_proxy_latency_test",
+				withAddr({
+					accountId: params.accountId,
+				}),
+			),
+		),
+	speedTestProxy: async (
+		params: AccountProxySpeedTestPayload,
+	): Promise<ProxyTestJobState> =>
+		normalizeProxyTestJobState(
+			await invoke<unknown>(
+				"service_account_proxy_speed_test",
+				withAddr({
+					accountId: params.accountId,
+					providerId: params.providerId ?? null,
+					fileSizeId: params.fileSizeId ?? null,
+					diagnosticProviderId: params.diagnosticProviderId ?? null,
+					diagnosticFileSizeId: params.diagnosticFileSizeId ?? null,
+				}),
+			),
+		),
+	cloudflareSpeedTestProxy: async (
+		params: AccountProxyCloudflareSpeedTestPayload,
+	): Promise<ProxyTestJobState> =>
+		normalizeProxyTestJobState(
+			await invoke<unknown>(
+				"service_account_proxy_cloudflare_speed_test",
+				withAddr({
+					accountId: params.accountId,
+					config: params.config ?? null,
+				}),
+			),
+		),
+	getProxyTestJob: async (
+
+		accountId: string,
+		jobId: string,
+	): Promise<ProxyTestJobState> =>
+		normalizeProxyTestJobState(
+			await invoke<unknown>(
+				"service_account_proxy_test_job",
+				withAddr({ accountId, jobId }),
+			),
+		),
+	cancelProxyTestJob: async (
+		accountId: string,
+		jobId: string,
+	): Promise<void> => {
+		await invoke<unknown>(
+			"service_account_proxy_cancel_test",
+			withAddr({ accountId, jobId }),
+		);
+	},
+	getAccountProxySpeedHistory: async (
+		accountId: string,
+		limit?: number,
+	): Promise<ProxySpeedTestListResult> =>
+		normalizeProxySpeedTestListResult(
+			await invoke<unknown>(
+				"service_account_proxy_speed_test_history",
+				withAddr({ accountId, limit: limit ?? null }),
+			),
+		),
+	getAccountProxyLatencyHistory: async (
+		accountId: string,
+		limit?: number,
+	): Promise<AccountProxyUrlTestListResult> =>
+		normalizeAccountProxyUrlTestListResult(
+			await invoke<unknown>(
+				"service_account_proxy_latency_test_history",
+				withAddr({ accountId, limit: limit ?? null }),
+			),
+		),
+	getAccountProxyDiagnosticsHistory: async (
+		accountId: string,
+		limit?: number,
+	): Promise<ProxyDiagnosticTestListResult> =>
+		normalizeProxyDiagnosticTestListResult(
+			await invoke<unknown>(
+				"service_account_proxy_diagnostics_history",
+				withAddr({ accountId, limit: limit ?? null }),
 			),
 		),
 

@@ -48,7 +48,6 @@ export function formatProxyGeoCountryLabel(
   const code = normalizeCountryCode(countryCode);
   const name = String(countryName || "").trim();
 
-  if (name && code) return `${name} (${code})`;
   if (name) return name;
   if (code) return code;
   return t ? t("未知") : "Unknown";
@@ -60,7 +59,6 @@ export function formatProxyGeoLocationParts(
 ): string[] {
   const parts = [
     String(geo.cityName || "").trim(),
-    String(geo.regionName || "").trim(),
     formatProxyGeoCountryLabel(geo.countryCode, geo.countryName, t)
   ].filter(Boolean);
 
