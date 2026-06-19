@@ -1,11 +1,12 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import {
 	ArrowDown,
 	ArrowUp,
 	ArrowUpDown,
 	BarChart3,
+	Clock,
 	Download,
 	FileUp,
 	FolderOpen,
@@ -75,8 +76,11 @@ import {
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 import { formatCompactNumber } from "@/lib/utils/usage";
-import type { AccountProxySettings } from "@/lib/api/account-client";
-import type { Account } from "@/types";
+import type {
+	AccountProxySettings,
+	AccountProxySource,
+} from "@/lib/api/account-client";
+import type { Account, ProxyProfile, ProxyTestJobState } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { AccountProxyCell } from "@/components/accounts/account-proxy-cell";
 import { AccountProxyGeoStatusGrid } from "@/components/accounts/account-proxy-status-grid";
@@ -144,8 +148,11 @@ export interface AccountsPageViewProps {
 	cleanupStatusOptions: CleanupStatusOption[];
 	proxyDialogAccount: Account | null;
 	proxySettings: AccountProxySettings | null;
+	proxyProfiles: ProxyProfile[];
 	isProxySettingsLoading: boolean;
 	proxyEnabledDraft: boolean;
+	proxySourceDraft: AccountProxySource;
+	proxyProfileIdDraft: string;
 	proxyUrlDraft: string;
 	selectedAccount: Account | null;
 	accountEditorState: AccountEditorState | null;
@@ -184,6 +191,8 @@ export interface AccountsPageViewProps {
 	setDeleteDialogState: Dispatch<SetStateAction<DeleteDialogState>>;
 	setCleanupDialogOpen: Dispatch<SetStateAction<boolean>>;
 	setProxyEnabledDraft: Dispatch<SetStateAction<boolean>>;
+	setProxySourceDraft: Dispatch<SetStateAction<AccountProxySource>>;
+	setProxyProfileIdDraft: Dispatch<SetStateAction<string>>;
 	setProxyUrlDraft: Dispatch<SetStateAction<string>>;
 	setAccountEditorState: Dispatch<SetStateAction<AccountEditorState | null>>;
 	setLabelDraft: Dispatch<SetStateAction<string>>;
@@ -237,7 +246,67 @@ export interface AccountsPageViewProps {
 		enabled: boolean,
 		currentStatus: string,
 	) => void;
+	activeJobs: Record<string, ProxyTestJobState>;
+	presetsData: any;
+	isLoadingPresets: boolean;
+	isPresetsError: boolean;
+	presetsError: any;
+	isCancellingJobId: string | null;
+	runAccountLatencyTest: (accountId: string) => Promise<void>;
+	runAccountSpeedTest: (accountId: string) => Promise<void>;
+	cancelAccountSpeedTest: (accountId: string, jobId: string) => Promise<void>;
 }
+
+function formatTransferredBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let amount = value;
+  let unitIndex = 0;
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024;
+    unitIndex += 1;
+  }
+  const digits = amount >= 100 || unitIndex === 0 ? 0 : 1;
+  return `${amount.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function formatJobPhase(
+  phase: string,
+  t: (key: string) => string,
+): string {
+  switch (phase) {
+    case "preflight":
+      return t("预检中");
+    case "latency":
+      return t("延迟测试中");
+    case "download":
+      return t("下载测试中");
+    case "upload":
+      return t("上传测试中");
+    case "saving":
+      return t("保存结果中");
+    case "done":
+      return t("已完成");
+    case "queued":
+    default:
+      return t("排队中");
+  }
+}
+
+function formatMetric(
+  value: number | null,
+  suffix: string,
+  digits = 0,
+): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(digits)} ${suffix}`;
+}
+
+function isTerminalJobStatus(status: string): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+
 
 export function AccountsPageView(props: AccountsPageViewProps) {
 	const { t } = useI18n();
@@ -268,8 +337,11 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 		cleanupStatusOptions,
 		proxyDialogAccount,
 		proxySettings,
+		proxyProfiles,
 		isProxySettingsLoading,
 		proxyEnabledDraft,
+		proxySourceDraft,
+		proxyProfileIdDraft,
 		proxyUrlDraft,
 		selectedAccount,
 		accountEditorState,
@@ -308,6 +380,8 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 		setDeleteDialogState,
 		setCleanupDialogOpen,
 		setProxyEnabledDraft,
+		setProxySourceDraft,
+		setProxyProfileIdDraft,
 		setProxyUrlDraft,
 		setAccountEditorState,
 		setLabelDraft,
@@ -354,7 +428,18 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 		clearPreferredAccount,
 		setPreferredAccount,
 		toggleAccountStatus,
+		activeJobs,
+		presetsData,
+		isLoadingPresets,
+		isPresetsError,
+		presetsError,
+		isCancellingJobId,
+		runAccountLatencyTest,
+		runAccountSpeedTest,
+		cancelAccountSpeedTest,
 	} = props;
+
+
 	const cleanupSelectedCount = cleanupStatusOptions.reduce(
 		(total, option) =>
 			cleanupStatusDraft.includes(option.id) ? total + option.count : total,
@@ -365,6 +450,14 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 		isSavingAccountProxy ||
 		isClearingAccountProxy ||
 		isTestingAccountProxy;
+	const selectedProxyProfile =
+		proxyProfiles.find((profile) => profile.id === proxyProfileIdDraft) || null;
+	const needsMissingProxyProfileOption =
+		proxySourceDraft === "profile" &&
+		Boolean(proxyProfileIdDraft) &&
+		!selectedProxyProfile;
+	const accountProxySourceText =
+		proxySourceDraft === "profile" ? t("来自 Proxy settings") : t("自定义代理地址");
 	const accountProxyStatusText = (() => {
 		const status = String(proxySettings?.status || "not_configured");
 		switch (status) {
@@ -1320,29 +1413,72 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 							/>
 						</div>
 						<div className="grid gap-2">
-							<Label htmlFor="account-proxy-url">{t("代理地址")}</Label>
-							<div className="flex gap-2">
-								<Input
-									id="account-proxy-url"
-									value={proxyUrlDraft}
-									disabled={accountProxyBusy}
-									onChange={(event) => setProxyUrlDraft(event.target.value)}
-									placeholder="http://127.0.0.1:7891"
-								/>
-								<Button
-									type="button"
-									variant="outline"
-									disabled={accountProxyBusy || !proxySettings}
-									onClick={() => void handleClearProxySettings()}
+							<Label htmlFor="account-proxy-profile">{t("代理配置")}</Label>
+							<Select
+								value={proxyProfileIdDraft || "__empty__"}
+								disabled={accountProxyBusy || proxyProfiles.length === 0}
+								onValueChange={(value) =>
+									setProxyProfileIdDraft(
+										!value || value === "__empty__" ? "" : value,
+									)
+								}
+							>
+								<SelectTrigger
+									id="account-proxy-profile"
+									className="rounded-xl bg-card/50"
 								>
-									{isClearingAccountProxy ? (
-										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									<SelectValue
+										placeholder={
+											proxyProfiles.length === 0
+												? t("暂无可用代理配置")
+												: t("选择代理配置")
+										}
+									>
+										{proxyProfileIdDraft && proxyProfileIdDraft !== "__empty__"
+											? selectedProxyProfile?.name || proxySettings?.proxyProfileName || proxyProfileIdDraft
+											: undefined}
+									</SelectValue>
+								</SelectTrigger>
+								<SelectContent>
+									{proxyProfiles.length === 0 ? (
+										<SelectItem value="__empty__" disabled>
+											{t("暂无可用代理配置")}
+										</SelectItem>
 									) : null}
-									{t("清除")}
-								</Button>
+									{needsMissingProxyProfileOption ? (
+										<SelectItem value={proxyProfileIdDraft} disabled>
+											{proxySettings?.proxyProfileName ||
+												t("已删除的代理配置")}
+										</SelectItem>
+									) : null}
+									{proxyProfiles.map((profile) => (
+										<SelectItem key={profile.id} value={profile.id}>
+											{profile.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-3 text-sm leading-5 text-muted-foreground">
+								<div className="break-all">
+									{selectedProxyProfile?.proxyUrlRedacted ||
+										proxySettings?.proxyUrlRedacted ||
+										t("未绑定代理端点")}
+								</div>
+								<div className="mt-1">
+									{selectedProxyProfile
+										? selectedProxyProfile.enabled
+											? t("当前配置已启用")
+											: t("当前配置已禁用，保存后该账号会 fail-closed")
+										: proxySettings?.proxyProfileEnabled === false
+											? t("当前配置已禁用，保存后该账号会 fail-closed")
+											: t("未选择代理配置")}
+								</div>
 							</div>
-							<div className="mt-4 grid gap-2">
-								<Label className="text-sm font-medium">{t("代理信息")}</Label>
+						</div>
+						<div className="mt-4 grid gap-2">
+							<div className="flex items-center justify-between">
+								<Label className="text-sm font-semibold">{t("代理信息")}</Label>
+							</div>
 								<div className="rounded-xl bg-muted/20 px-4 py-4 text-xs">
 									<div className="flex flex-wrap items-start gap-x-12 gap-y-3 border-b border-border/50 pb-4 mb-4">
 										<div>
@@ -1375,17 +1511,66 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 									<AccountProxyGeoStatusGrid geo={proxySettings} t={t} />
 								</div>
 							</div>
-							<p className="text-[11px] leading-4 text-muted-foreground">
-								{t(
-									"支持 http、https、socks4、socks5；sing-box mixed inbound 通常填写 http://127.0.0.1:端口。",
-								)}
-							</p>
-							<p className="text-[11px] leading-4 text-amber-600 dark:text-amber-400">
-								{t(
-									"建议登录、刷新、用量和 API 请求保持同一代理与地区，以降低账号风控和状态漂移。",
-								)}
-							</p>
-						</div>
+							{/* Кнопки тестов в одну линию */}
+							<div className="flex gap-2 mt-2">
+								{proxyDialogAccount && (() => {
+									const activeJob = activeJobs[proxyDialogAccount.id];
+									const isLatencyRunning = activeJob && activeJob.kind === "latency" && !isTerminalJobStatus(activeJob.status);
+									return (
+										<Button
+											type="button"
+											className="flex-1"
+											disabled={isLatencyRunning}
+											onClick={() => void runAccountLatencyTest(proxyDialogAccount.id)}
+										>
+											{isLatencyRunning ? (
+												<>
+													<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+													{t("测试中...")}
+												</>
+											) : (
+												t("Тест задержки")
+											)}
+										</Button>
+									);
+								})()}
+
+								{proxyDialogAccount && (() => {
+									const activeJob = activeJobs[proxyDialogAccount.id];
+									const isSpeedRunning = activeJob && activeJob.kind === "speed" && !isTerminalJobStatus(activeJob.status);
+									const isCancelling = activeJob && isCancellingJobId === activeJob.jobId;
+
+									return (
+										<div className="flex flex-1 gap-2">
+											<Button
+												type="button"
+												className="flex-1"
+												disabled={isSpeedRunning}
+												onClick={() => void runAccountSpeedTest(proxyDialogAccount.id)}
+											>
+												{isSpeedRunning ? (
+													<>
+														<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+														{t("测试中...")}
+													</>
+												) : (
+													t("Тест скорости")
+												)}
+											</Button>
+											{isSpeedRunning && activeJob && (
+												<Button
+													type="button"
+													variant="destructive"
+													disabled={isCancelling}
+													onClick={() => void cancelAccountSpeedTest(proxyDialogAccount.id, activeJob.jobId)}
+												>
+													{isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : t("Отменить")}
+												</Button>
+											)}
+										</div>
+									);
+								})()}
+							</div>
 
 						{proxySettings?.lastError ? (
 							<div className="grid grid-cols-2 gap-4 rounded-xl border border-primary/5 bg-accent/20 px-4 py-3 text-xs sm:grid-cols-4">
@@ -1615,6 +1800,7 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+
 		</div>
 	);
 }

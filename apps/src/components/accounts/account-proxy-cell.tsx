@@ -75,8 +75,10 @@ export function ProxyCountryFlag({
 function formatProxyUrlHost(urlStr?: string | null): string {
 	if (!urlStr) return "";
 	try {
-		const withoutProtocol = urlStr.replace(/^(https?:\/\/|socks[45][ah]?:\/\/)/i, "");
-		return withoutProtocol;
+		const parsed = new URL(urlStr);
+		const host = parsed.hostname || "";
+		if (!host) return urlStr;
+		return parsed.port ? `${host}:${parsed.port}` : host;
 	} catch {
 		return urlStr || "";
 	}
@@ -98,23 +100,24 @@ export function AccountProxyCell({ account }: { account: Account }) {
 	}
 
 	const displayIp = ip || formatProxyUrlHost(account.proxyUrl);
+	const displayName = account.proxyProfileName || displayIp;
 
-	if (!displayIp) {
+	if (!displayName) {
 		return <span className="text-muted-foreground">–</span>;
 	}
 
 	return (
 		<Tooltip>
-			<TooltipTrigger render={<div />} className="min-w-0 cursor-help">
-				<div className="flex min-w-0 items-center gap-1.5">
+			<TooltipTrigger render={<div />} className="min-w-0 cursor-help w-full">
+				<div className="flex items-start gap-1.5 w-full">
 					<ProxyFlag
 						countryCode={countryCode}
 						flagEmoji={flagEmoji}
 						flagImgUrl={flagImgUrl}
-						className="shrink-0"
+						className="shrink-0 mt-0.5"
 					/>
-					<span className="min-w-0 truncate font-mono text-[11px]" title={displayIp}>
-						{displayIp}
+					<span className="min-w-0 text-xs leading-normal whitespace-normal break-words text-left" title={displayIp}>
+						{displayName}
 					</span>
 				</div>
 			</TooltipTrigger>
