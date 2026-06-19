@@ -111,6 +111,8 @@ fn seed_account_proxy(db_path: &PathBuf, account_id: &str, enabled: bool, proxy_
         .upsert_account_proxy_settings(
             account_id,
             enabled,
+            Some("custom"),
+            None,
             proxy_url,
             "unchecked",
             None,

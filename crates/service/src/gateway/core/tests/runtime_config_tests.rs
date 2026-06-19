@@ -1,5 +1,5 @@
 use super::*;
-use codexmanager_core::storage::{now_ts, Account, Storage};
+use codexmanager_core::storage::{now_ts, Account, ProxyProfileCreateInput, Storage};
 use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -438,6 +438,65 @@ fn upstream_client_for_account_fails_closed_for_enabled_proxy_without_url() {
 }
 
 #[test]
+fn upstream_proxy_url_for_account_uses_bound_proxy_profile() {
+    let _guard = crate::test_env_guard();
+    let db = TestDbGuard::new("runtime-account-proxy-profile");
+    seed_account(db.path(), "acc-profile");
+    seed_proxy_profile(db.path(), "pp-profile", true, "http://127.0.0.1:7011");
+    seed_account_proxy_profile_binding(
+        db.path(),
+        "acc-profile",
+        "pp-profile",
+        Some("http://127.0.0.1:7999"),
+    );
+    let _global_guard = EnvGuard::set(ENV_UPSTREAM_PROXY_URL, "http://127.0.0.1:7002");
+    let _pool_guard = EnvGuard::set(ENV_PROXY_LIST, "http://127.0.0.1:7003");
+
+    reload_from_env();
+
+    assert_eq!(
+        upstream_proxy_url_for_account("acc-profile").as_deref(),
+        Some("http://127.0.0.1:7011")
+    );
+}
+
+#[test]
+fn upstream_client_for_account_fails_closed_for_invalid_profile_binding() {
+    let _guard = crate::test_env_guard();
+    let db = TestDbGuard::new("runtime-account-proxy-profile-invalid");
+    let _global_guard = EnvGuard::set(ENV_UPSTREAM_PROXY_URL, "http://127.0.0.1:7002");
+    let _pool_guard = EnvGuard::set(ENV_PROXY_LIST, "http://127.0.0.1:7003");
+
+    seed_account(db.path(), "acc-missing-profile");
+    seed_account_proxy_profile_binding(db.path(), "acc-missing-profile", "pp-missing", None);
+
+    seed_account(db.path(), "acc-disabled-profile");
+    seed_proxy_profile(db.path(), "pp-disabled", false, "http://127.0.0.1:7012");
+    seed_account_proxy_profile_binding(db.path(), "acc-disabled-profile", "pp-disabled", None);
+
+    seed_account(db.path(), "acc-invalid-profile");
+    seed_proxy_profile(db.path(), "pp-invalid", true, "http://");
+    seed_account_proxy_profile_binding(db.path(), "acc-invalid-profile", "pp-invalid", None);
+
+    reload_from_env();
+
+    let missing = upstream_client_for_account("acc-missing-profile")
+        .expect_err("fail closed for missing bound profile");
+    assert!(missing.contains("fail-closed"));
+    assert!(missing.contains("missing"));
+
+    let disabled = upstream_client_for_account("acc-disabled-profile")
+        .expect_err("fail closed for disabled bound profile");
+    assert!(disabled.contains("fail-closed"));
+    assert!(disabled.contains("disabled"));
+
+    let invalid = upstream_client_for_account("acc-invalid-profile")
+        .expect_err("fail closed for invalid bound profile");
+    assert!(invalid.contains("fail-closed"));
+    assert!(invalid.contains("invalid"));
+}
+
+#[test]
 fn account_proxy_set_and_clear_invalidate_gateway_cache() {
     let _guard = crate::test_env_guard();
     let db = TestDbGuard::new("runtime-account-proxy-cache");
@@ -450,6 +509,8 @@ fn account_proxy_set_and_clear_invalidate_gateway_cache() {
     crate::account_proxy::set_account_proxy_settings(
         "acc-cache",
         true,
+        None,
+        None,
         Some("http://127.0.0.1:7101"),
         None,
         None,
@@ -471,6 +532,8 @@ fn account_proxy_set_and_clear_invalidate_gateway_cache() {
     crate::account_proxy::set_account_proxy_settings(
         "acc-cache",
         true,
+        None,
+        None,
         Some("http://127.0.0.1:7102"),
         None,
         None,
@@ -763,6 +826,8 @@ fn seed_account_proxy(dir: &PathBuf, account_id: &str, enabled: bool, proxy_url:
         .upsert_account_proxy_settings(
             account_id,
             enabled,
+            Some("custom"),
+            None,
             proxy_url,
             "unchecked",
             None,
@@ -786,6 +851,58 @@ fn seed_account_proxy(dir: &PathBuf, account_id: &str, enabled: bool, proxy_url:
             None,
         )
         .expect("insert account proxy settings");
+}
+
+fn seed_proxy_profile(dir: &PathBuf, profile_id: &str, enabled: bool, proxy_url: &str) {
+    let storage = open_test_storage(dir);
+    storage
+        .create_proxy_profile(&ProxyProfileCreateInput {
+            id: profile_id.to_string(),
+            name: profile_id.to_string(),
+            proxy_url: proxy_url.to_string(),
+            enabled,
+            tags_json: None,
+            notes: None,
+        })
+        .expect("insert proxy profile");
+}
+
+fn seed_account_proxy_profile_binding(
+    dir: &PathBuf,
+    account_id: &str,
+    profile_id: &str,
+    proxy_url: Option<&str>,
+) {
+    let storage = open_test_storage(dir);
+    storage
+        .upsert_account_proxy_settings(
+            account_id,
+            true,
+            Some("profile"),
+            Some(profile_id),
+            proxy_url,
+            "unchecked",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("insert account proxy profile binding");
 }
 
 fn open_test_storage(dir: &PathBuf) -> Storage {
