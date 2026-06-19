@@ -349,15 +349,6 @@ fn init_tracks_schema_migrations_and_is_idempotent() {
         )
         .expect("count 070 migration");
     assert_eq!(applied_070, 1);
-    let applied_071: i64 = storage
-        .conn
-        .query_row(
-            "SELECT COUNT(1) FROM schema_migrations WHERE version = '071_account_proxy_profile_binding'",
-            [],
-            |row| row.get(0),
-        )
-        .expect("count 071 migration");
-    assert_eq!(applied_071, 1);
     let applied_072: i64 = storage
         .conn
         .query_row(
@@ -367,16 +358,6 @@ fn init_tracks_schema_migrations_and_is_idempotent() {
         )
         .expect("count 072 migration");
     assert_eq!(applied_072, 1);
-    let applied_073: i64 = storage
-        .conn
-        .query_row(
-            "SELECT COUNT(1) FROM schema_migrations WHERE version = '073_account_proxy_test_latest'",
-            [],
-            |row| row.get(0),
-        )
-        .expect("count 073 migration");
-    assert_eq!(applied_073, 1);
-
     let applied_074: i64 = storage
         .conn
         .query_row(

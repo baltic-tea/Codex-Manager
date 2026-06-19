@@ -1,4 +1,4 @@
-CREATE TABLE proxy_profile_url_tests (
+CREATE TABLE IF NOT EXISTS proxy_profile_url_tests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   proxy_profile_id TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -12,6 +12,6 @@ CREATE TABLE proxy_profile_url_tests (
   error TEXT
 );
 
-CREATE INDEX idx_proxy_profile_url_tests_profile_tested_at
+CREATE INDEX IF NOT EXISTS idx_proxy_profile_url_tests_profile_tested_at
   ON proxy_profile_url_tests(proxy_profile_id, tested_at DESC, id DESC);
 

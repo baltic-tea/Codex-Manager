@@ -1307,19 +1307,9 @@ impl Storage {
             |s| s.ensure_proxy_profiles_table(),
         )?;
         self.apply_sql_or_compat_migration(
-            "071_account_proxy_profile_binding",
-            include_str!("../../migrations/071_account_proxy_profile_binding.sql"),
-            |s| s.ensure_account_proxy_settings_table(),
-        )?;
-        self.apply_sql_or_compat_migration(
             "072_proxy_profile_url_tests",
             include_str!("../../migrations/072_proxy_profile_url_tests.sql"),
             |s| s.ensure_proxy_profile_url_tests_table(),
-        )?;
-        self.apply_sql_or_compat_migration(
-            "073_account_proxy_test_latest",
-            include_str!("../../migrations/073_account_proxy_test_latest.sql"),
-            |s| s.ensure_account_proxy_settings_table(),
         )?;
         self.apply_sql_or_compat_migration(
             "074_proxy_history",
