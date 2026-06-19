@@ -113,6 +113,8 @@ pub(super) fn try_handle(req: &JsonRpcRequest) -> Option<JsonRpcResponse> {
         "account/proxy/set" => {
             let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
             let enabled = super::bool_param(req, "enabled").unwrap_or(false);
+            let source = first_str_param(req, &["source", "proxySource", "proxy_source"]);
+            let proxy_profile_id = first_str_param(req, &["proxyProfileId", "proxy_profile_id"]);
             let proxy_url = first_str_param(req, &["proxyUrl", "proxy_url"]);
 
             let status = super::str_param(req, "status");
@@ -137,6 +139,8 @@ pub(super) fn try_handle(req: &JsonRpcRequest) -> Option<JsonRpcResponse> {
             super::value_or_error(account_proxy::set_account_proxy_settings(
                 account_id,
                 enabled,
+                source,
+                proxy_profile_id,
                 proxy_url,
                 status,
                 latency_ms,
@@ -157,9 +161,88 @@ pub(super) fn try_handle(req: &JsonRpcRequest) -> Option<JsonRpcResponse> {
         "account/proxy/test" => {
             let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
             let enabled = super::bool_param(req, "enabled");
+            let source = first_str_param(req, &["source", "proxySource", "proxy_source"]);
+            let proxy_profile_id = first_str_param(req, &["proxyProfileId", "proxy_profile_id"]);
             let proxy_url = first_str_param(req, &["proxyUrl", "proxy_url"]);
             super::value_or_error(account_proxy::test_account_proxy_settings(
-                account_id, enabled, proxy_url,
+                account_id,
+                enabled,
+                source,
+                proxy_profile_id,
+                proxy_url,
+            ))
+        }
+        "account/proxy/latency-test" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            super::value_or_error(account_proxy::test_account_proxy_latency(
+                account_id,
+            ))
+        }
+        "account/proxy/speed-test" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            super::value_or_error(account_proxy::test_account_proxy_speed(
+                account_id,
+                first_str_param(req, &["providerId", "provider_id"]),
+                first_str_param(req, &["fileSizeId", "file_size_id"]),
+                first_str_param(req, &["diagnosticProviderId", "diagnostic_provider_id"]),
+                first_str_param(req, &["diagnosticFileSizeId", "diagnostic_file_size_id"]),
+            ))
+        }
+        "account/proxy/cloudflare-speed-test" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            let config = req
+                .params
+                .as_ref()
+                .and_then(|p| p.get("config"))
+                .cloned()
+                .map(serde_json::from_value::<crate::account::proxy_testing::cloudflare_style::config::CfStyleConfig>)
+                .transpose()
+                .map_err(|err| format!("invalid config parameter: {err}"));
+
+            match config {
+                Ok(conf) => super::value_or_error(account_proxy::test_account_proxy_cloudflare_style_speed(
+                    account_id,
+                    conf.unwrap_or_default(),
+                )),
+                Err(err) => super::value_or_error(Err::<serde_json::Value, String>(err)),
+
+            }
+        }
+
+
+        "account/proxy/test-job" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            let job_id = first_str_param(req, &["jobId", "job_id", "id"]).unwrap_or("");
+            super::value_or_error(account_proxy::get_account_proxy_test_job(
+                account_id, job_id,
+            ))
+        }
+        "account/proxy/cancel-test" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            let job_id = first_str_param(req, &["jobId", "job_id", "id"]).unwrap_or("");
+            super::ok_or_error(account_proxy::cancel_account_proxy_test_job(
+                account_id, job_id,
+            ))
+        }
+        "account/proxy/speed-test-history" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            super::value_or_error(account_proxy::get_account_proxy_speed_test_history(
+                account_id,
+                super::i64_param(req, "limit").map(|v| v as usize),
+            ))
+        }
+        "account/proxy/latency-test-history" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            super::value_or_error(account_proxy::get_account_proxy_latency_test_history(
+                account_id,
+                super::i64_param(req, "limit").map(|v| v as usize),
+            ))
+        }
+        "account/proxy/diagnostics-history" => {
+            let account_id = first_str_param(req, &["accountId", "account_id"]).unwrap_or("");
+            super::value_or_error(account_proxy::get_account_proxy_diagnostics_history(
+                account_id,
+                super::i64_param(req, "limit").map(|v| v as usize),
             ))
         }
         "account/import" => {
