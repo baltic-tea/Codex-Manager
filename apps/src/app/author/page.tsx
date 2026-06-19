@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,12 +11,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-} from "@/components/ui/table";
 import { appClient } from "@/lib/api/app-client";
 import { useRuntimeCapabilities } from "@/hooks/useRuntimeCapabilities";
 import { useI18n } from "@/lib/i18n/provider";
@@ -33,6 +27,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+
+type AuthorContentState = {
+  authorSponsors: SponsorLinkItem[];
+  authorServerRecommendations: SponsorLinkItem[];
+};
 
 const AUTHOR_WECHAT_ID = "ProsperGao";
 const AUTHOR_TELEGRAM_GROUP_URL = "https://t.me/+OdpFa9GvjxhjMDhl";
@@ -54,9 +53,58 @@ const AUTHOR_SUPPORT_IMAGES = [
 ] as const;
 
 const AUTHOR_PARTNER_IMAGE_BY_KEY: Record<string, string> = {
+  aixiamo: "/sponsors/aixiamo.jpg",
   xingsiyan: "/sponsors/xingsiyan.jpg",
   racknerd: "/sponsors/racknerd.gif",
 };
+
+function normalizeAuthorPartnerImageSrc(item: SponsorLinkItem): string | undefined {
+  const normalizedKey = item.key.toLowerCase();
+  const normalizedName = item.name.toLowerCase();
+  const keyedImage =
+    AUTHOR_PARTNER_IMAGE_BY_KEY[normalizedKey] ||
+    (normalizedName.includes("aixiamo")
+      ? AUTHOR_PARTNER_IMAGE_BY_KEY.aixiamo
+      : undefined);
+  const rawSrc = keyedImage || item.imageSrc?.trim();
+  if (!rawSrc) return undefined;
+
+  if (/^https?:\/\//i.test(rawSrc) || rawSrc.startsWith("/")) {
+    return rawSrc;
+  }
+
+  const normalized = rawSrc.replace(/\\/g, "/");
+  const publicSponsorPrefix = "assets/images/sponsors/";
+  if (normalized.startsWith(publicSponsorPrefix)) {
+    return `/sponsors/${normalized.slice(publicSponsorPrefix.length)}`;
+  }
+
+  return `/${normalized.replace(/^public\//, "")}`;
+}
+
+function splitMarkdownLines(markdown: string): string[] {
+  return markdown
+    .replace(/\r\n/g, "\n")
+    .replace(/ {2,}\n/g, "\n")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function renderInlineMarkdown(line: string) {
+  const parts = line.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => {
+    const strongMatch = part.match(/^\*\*([^*]+)\*\*$/);
+    if (strongMatch) {
+      return (
+        <strong key={`${part}-${index}`} className="font-semibold text-foreground">
+          {strongMatch[1]}
+        </strong>
+      );
+    }
+    return part;
+  });
+}
 
 function PartnerTable({
   items,
@@ -70,61 +118,134 @@ function PartnerTable({
   emptyVisualLabel: string;
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border/50 bg-background/40">
-      <Table className="min-w-full">
-        <TableBody>
-          {items.map((item, index) => (
-            <TableRow
-              key={item.key}
-              className={index === 0 ? "border-b-0" : ""}
-            >
-              <TableCell className="w-[180px] p-5 align-middle">
-                <div className="flex items-center justify-center rounded-xl border border-border/50 bg-white/95 p-4">
-                  {AUTHOR_PARTNER_IMAGE_BY_KEY[item.key] || item.imageSrc ? (
-                    <img
-                      src={AUTHOR_PARTNER_IMAGE_BY_KEY[item.key] || item.imageSrc}
-                      alt={t(item.imageAlt ?? item.name)}
-                      className="max-h-20 w-auto object-contain"
-                    />
-                  ) : (
-                    <div className="flex h-20 w-full max-w-[180px] items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 via-background to-primary/5 px-4 text-center">
-                      <span className="text-lg font-semibold tracking-tight text-foreground">
-                        {t(emptyVisualLabel)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell className="p-5 align-middle">
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <h3 className="text-base font-semibold text-foreground">
-                      {t(item.name)}
-                    </h3>
-                    <p className="text-sm leading-7 text-muted-foreground">
-                      {t(item.description)}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        void onOpenLink(item.href);
-                      }}
-                      className="rounded-full"
-                    >
-                      {t(item.actionLabel)}
-                      <ExternalLink data-icon="inline-end" />
-                    </Button>
-                  </div>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div
+      className="overflow-hidden rounded-xl border border-border/50 bg-background/40"
+      data-testid="author-partner-list"
+    >
+      <div className="divide-y divide-border/50">
+        {items.map((item) => (
+          <PartnerTableRow
+            key={item.key}
+            item={item}
+            onOpenLink={onOpenLink}
+            translate={translate}
+            emptyVisualLabel={emptyVisualLabel}
+          />
+        ))}
+      </div>
     </div>
+  );
+}
+
+function PartnerLogo({
+  item,
+  translate,
+  emptyVisualLabel,
+}: {
+  item: SponsorLinkItem;
+  translate: (message: string) => string;
+  emptyVisualLabel: string;
+}) {
+  const imageSrc = normalizeAuthorPartnerImageSrc(item);
+  const [imageFailed, setImageFailed] = useState(false);
+  const fallbackLabel = translate(
+    item.imageAlt ?? (item.name || emptyVisualLabel),
+  );
+
+  if (imageSrc && !imageFailed) {
+    return (
+      <img
+        src={imageSrc}
+        alt={fallbackLabel}
+        className="max-h-20 max-w-full object-contain"
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-20 w-full max-w-[180px] items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 via-background to-primary/5 px-4 text-center">
+      <span className="text-sm font-semibold leading-5 tracking-tight text-foreground">
+        {fallbackLabel}
+      </span>
+    </div>
+  );
+}
+
+function PartnerTableRow({
+  item,
+  onOpenLink,
+  translate,
+  emptyVisualLabel,
+}: {
+  item: SponsorLinkItem;
+  onOpenLink: (url: string) => Promise<void>;
+  translate: (message: string) => string;
+  emptyVisualLabel: string;
+}) {
+  const translatedName = translate(item.name);
+  const descriptionLines = useMemo(
+    () => splitMarkdownLines(translate(item.description)),
+    [item.description, translate],
+  );
+
+  return (
+    <div className="grid gap-5 p-5 md:grid-cols-[120px_minmax(0,1fr)]">
+      <div className="flex min-w-0 items-center md:justify-center">
+        <div className="flex w-full max-w-[180px] items-center justify-center rounded-xl border border-border/50 bg-white/95 p-4">
+          <PartnerLogo
+            item={item}
+            translate={translate}
+            emptyVisualLabel={emptyVisualLabel}
+          />
+        </div>
+      </div>
+      <div className="min-w-0 space-y-3">
+        <div className="space-y-1">
+          <h3 className="break-words text-base font-semibold text-foreground [overflow-wrap:anywhere]">
+            {translatedName}
+          </h3>
+          <div
+            className="space-y-2 text-sm leading-7 text-muted-foreground"
+            data-testid={`author-partner-description-${item.key}`}
+          >
+            {descriptionLines.map((line) => (
+              <p
+                key={line}
+                className="whitespace-normal break-words [overflow-wrap:anywhere]"
+              >
+                {renderInlineMarkdown(line)}
+              </p>
+            ))}
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              void onOpenLink(item.href);
+            }}
+            className="max-w-full rounded-full"
+          >
+            <span className="min-w-0 truncate">
+              {translate(item.actionLabel)}
+            </span>
+            <ExternalLink data-icon="inline-end" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyAuthorContent({ translate }: { translate: (message: string) => string }) {
+  return (
+    <Card className="glass-card shadow-sm">
+      <CardContent className="py-12 text-center">
+        <p className="text-sm text-muted-foreground">{translate("暂无内容")}</p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -132,10 +253,10 @@ export default function AuthorPage() {
   const { t } = useI18n();
   const { authorContentUrl } = useRuntimeCapabilities();
   const contentUrl = authorContentUrl || FALLBACK_AUTHOR_CONTENT_API;
-  const [authorContent, setAuthorContent] = useState<{
-    authorSponsors: SponsorLinkItem[];
-    authorServerRecommendations: SponsorLinkItem[];
-  } | null>(null);
+  const [authorContent, setAuthorContent] = useState<AuthorContentState>({
+    authorSponsors: [],
+    authorServerRecommendations: [],
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -158,7 +279,13 @@ export default function AuthorPage() {
             ),
           });
         })
-        .catch(() => undefined);
+        .catch(() => {
+          if (cancelled) return;
+          setAuthorContent({
+            authorSponsors: [],
+            authorServerRecommendations: [],
+          });
+        });
     };
 
     loadContent();
@@ -170,9 +297,11 @@ export default function AuthorPage() {
     };
   }, [contentUrl]);
 
-  const visibleSponsors = authorContent?.authorSponsors ?? [];
+  const visibleSponsors = authorContent.authorSponsors;
   const visibleServerRecommendations =
-    authorContent?.authorServerRecommendations ?? [];
+    authorContent.authorServerRecommendations;
+  const hasAuthorContent =
+    visibleSponsors.length > 0 || visibleServerRecommendations.length > 0;
 
   const handleOpenLink = async (url: string) => {
     try {
@@ -214,6 +343,8 @@ export default function AuthorPage() {
         </TabsList>
 
         <TabsContent value="sponsor" className="space-y-6">
+          {!hasAuthorContent ? <EmptyAuthorContent translate={t} /> : null}
+
           {visibleSponsors.length > 0 ? (
             <Card className="glass-card shadow-sm">
               <CardHeader className="gap-3">

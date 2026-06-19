@@ -59,7 +59,10 @@ test("normalizeRuntimeCapabilities 为 Web 网关补齐默认能力", () => {
 
   assert.equal(capabilities.mode, "web-gateway");
   assert.equal(capabilities.rpcBaseUrl, "/gateway/rpc");
-  assert.equal(capabilities.authorContentUrl, "/api/author-content");
+  assert.equal(
+    capabilities.authorContentUrl,
+    "https://author.qxnm.top/api/public/author-content"
+  );
   assert.equal(capabilities.canManageService, false);
   assert.equal(capabilities.canUseBrowserFileImport, true);
   assert.equal(capabilities.canUseBrowserDownloadExport, true);

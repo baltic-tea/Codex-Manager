@@ -1412,6 +1412,15 @@ export const EN_MESSAGES: MessageCatalog = {
   "刷新 AT/RT": "Refresh AT/RT",
   "刷新全部 AT/RT": "Refresh all AT/RT",
   "刷新用量": "Refresh usage",
+  "路由策略": "Routing strategy",
+  "路由来源": "Routing source",
+  "客户端模型": "Client model",
+  "最终平台模型": "Final platform model",
+  "模型来源": "Model source",
+  "客户端推理": "Client reasoning",
+  "最终推理": "Final reasoning",
+  "推理来源": "Reasoning source",
+  "服务等级来源": "Service tier source",
   "选择导出方式；如果已勾选账号，则只导出当前选中项。":
     "Choose the export format. If accounts are selected, only the current selection will be exported.",
   "选择要删除的账号状态；删除后不可恢复。":
@@ -1449,6 +1458,7 @@ export const EN_MESSAGES: MessageCatalog = {
     "This page brings together sponsor information from the README, recommended services, and author contact options.",
   "赞助商": "Sponsors",
   "赞助商列表": "Sponsor list",
+  "暂无内容": "No content yet",
   "沿用 README 的展示内容，并同步星思研邀请链接。":
     "Reuse the sponsor content from the README and sync the Xing Si Yan referral link.",
   "这里维护 /author 页的赞助商内容。部署在服务器上的 codexmanager-web 会从服务器数据库读取这些内容，无需重新发版本。":
@@ -1502,6 +1512,10 @@ export const EN_MESSAGES: MessageCatalog = {
   "微信赞助码": "WeChat sponsor QR",
   "项目持续维护、修问题和做适配，欢迎随缘支持。":
     "The project is actively maintained with ongoing fixes and compatibility work. Support is welcome if you feel like it.",
+  "AI夏末 AIXiamo": "AI夏末 AIXiamo",
+  "AIXiamo 面向 Codex CLI、Claude Code、Gemini CLI 等开发者场景，提供 ChatGPT Pro 5x / 20x、ChatGPT Plus、Claude Max、Gemini Pro、Grok 等 AI 会员开通与售后协助服务。支持支付宝 / 微信支付、自动充值、订单可查、教程说明与售后协助，适合需要稳定使用 AI 编程、代码生成、文档处理和高频对话的开发者用户。":
+    "AIXiamo serves developer workflows such as Codex CLI, Claude Code, and Gemini CLI, providing AI membership activation and after-sales assistance for ChatGPT Pro 5x / 20x, ChatGPT Plus, Claude Max, Gemini Pro, Grok, and more. It supports Alipay and WeChat Pay, automatic top-ups, order lookup, tutorials, and after-sales support, making it suitable for developers who need stable access for AI programming, code generation, document processing, and frequent conversations.",
+  "查看服务": "View services",
   "VisionCoder 是一款高颜值、可灵活切换模型的桌面 AI 编程工具。它支持 Claude、Gemini、GPT，并集成 Claude Code、Gemini CLI、Codex、OpenCode 等多种 CLI 能力。":
     "VisionCoder is a polished desktop AI coding tool with flexible model switching. It supports Claude, Gemini, GPT, and integrates multiple CLI capabilities such as Claude Code, Gemini CLI, Codex, and OpenCode.",
   "访问官网": "Visit site",

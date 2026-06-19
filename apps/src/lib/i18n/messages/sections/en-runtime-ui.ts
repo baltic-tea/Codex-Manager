@@ -31,6 +31,7 @@ export const EN_RUNTIME_UI_MESSAGES: MessageCatalog = {
   "这里集中展示 README 里的赞助信息、推荐服务，以及作者联系入口。":
     "This page gathers sponsorship information, recommended services, and author contact entry points from the README.",
   赞助商: "Sponsor",
+  暂无内容: "No content yet",
   "沿用 README 的展示内容，并同步星思研邀请链接。":
     "Uses the README presentation and keeps the XingSiyan invitation link in sync.",
   服务器推荐: "Server recommendation",
@@ -58,6 +59,10 @@ export const EN_RUNTIME_UI_MESSAGES: MessageCatalog = {
   微信赞助码: "WeChat Pay sponsor QR code",
   "项目持续维护、修问题和做适配，欢迎随缘支持。":
     "The project is continuously maintained, fixed, and adapted. Casual support is welcome.",
+  "AI夏末 AIXiamo": "AI夏末 AIXiamo",
+  "AIXiamo 面向 Codex CLI、Claude Code、Gemini CLI 等开发者场景，提供 ChatGPT Pro 5x / 20x、ChatGPT Plus、Claude Max、Gemini Pro、Grok 等 AI 会员开通与售后协助服务。支持支付宝 / 微信支付、自动充值、订单可查、教程说明与售后协助，适合需要稳定使用 AI 编程、代码生成、文档处理和高频对话的开发者用户。":
+    "AIXiamo serves developer workflows such as Codex CLI, Claude Code, and Gemini CLI, providing AI membership activation and after-sales assistance for ChatGPT Pro 5x / 20x, ChatGPT Plus, Claude Max, Gemini Pro, Grok, and more. It supports Alipay and WeChat Pay, automatic top-ups, order lookup, tutorials, and after-sales support, making it suitable for developers who need stable access for AI programming, code generation, document processing, and frequent conversations.",
+  查看服务: "View services",
   作者微信二维码: "Author WeChat QR code",
   内置精选: "Built-in picks",
   "默认使用官方精选插件，适合开箱即用。":

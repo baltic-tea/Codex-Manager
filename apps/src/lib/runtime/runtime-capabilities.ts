@@ -1,13 +1,15 @@
 import type { RuntimeCapabilities, RuntimeMode } from "@/types";
 
 export const DEFAULT_WEB_RPC_BASE_URL = "/api/rpc";
-export const DEFAULT_WEB_AUTHOR_CONTENT_URL = "/api/author-content";
+export const DEFAULT_AUTHOR_CONTENT_URL =
+  "https://author.qxnm.top/api/public/author-content";
+export const DEFAULT_WEB_AUTHOR_CONTENT_URL = DEFAULT_AUTHOR_CONTENT_URL;
 export const DEFAULT_UNSUPPORTED_WEB_REASON =
   "当前页面缺少 CodexManager Web 运行壳，无法访问管理 RPC。请通过 codexmanager-web 打开，或在反向代理中转发 /api/rpc。";
 const CONFIGURED_AUTHOR_CONTENT_URL =
   normalizeAuthorContentUrl(
     process.env.NEXT_PUBLIC_CODEXMANAGER_AUTHOR_CONTENT_URL
-  ) || "https://author.qxnm.top/api/public/author-content";
+  ) || DEFAULT_AUTHOR_CONTENT_URL;
 const CONFIGURED_WEB_AUTHOR_CONTENT_URL = normalizeAuthorContentUrl(
   process.env.NEXT_PUBLIC_CODEXMANAGER_AUTHOR_CONTENT_URL
 );

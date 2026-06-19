@@ -23,6 +23,7 @@ use rand::RngCore;
 use tokio::sync::{watch, Mutex};
 use tower_http::services::{ServeDir, ServeFile};
 
+const DEFAULT_AUTHOR_CONTENT_URL: &str = "https://author.qxnm.top/api/public/author-content";
 const WEB_AUTH_COOKIE_NAME: &str = "codexmanager_web_auth";
 
 #[derive(Clone)]
@@ -370,7 +371,7 @@ fn escape_html(text: &str) -> String {
 /// 返回函数执行结果
 async fn runtime_info() -> impl IntoResponse {
     let author_content_url = read_env_trim("CODEXMANAGER_AUTHOR_CONTENT_URL")
-        .unwrap_or_else(|| "/api/author-content".to_string());
+        .unwrap_or_else(|| DEFAULT_AUTHOR_CONTENT_URL.to_string());
     Json(serde_json::json!({
         "mode": "web-gateway",
         "rpcBaseUrl": "/api/rpc",
@@ -758,7 +759,10 @@ mod tests {
 
         assert_eq!(payload["mode"], "web-gateway");
         assert_eq!(payload["rpcBaseUrl"], "/api/rpc");
-        assert_eq!(payload["authorContentUrl"], "/api/author-content");
+        assert_eq!(
+            payload["authorContentUrl"],
+            "https://author.qxnm.top/api/public/author-content"
+        );
         assert_eq!(payload["canManageService"], false);
         assert_eq!(payload["canSelfUpdate"], false);
         assert_eq!(payload["canCloseToTray"], false);
