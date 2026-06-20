@@ -25,7 +25,6 @@ export const EN_MESSAGES: MessageCatalog = {
   "上传预设": "Upload preset",
   "默认（所有大小）": "Default (all sizes)",
   "Download determines how fast your network connection can get data from the test network. This is important when downloading large files such as updates for applications or streaming video services. Download speed is tested by downloading files of various sizes. The number reported represents the 90th percentile of download measurements and not the absolute maximum. Scroll down to view details.": "Download determines how fast your network connection can get data from the test network. This is important when downloading large files such as updates for applications or streaming video services. Download speed is tested by downloading files of various sizes. The number reported represents the 90th percentile of download measurements and not the absolute maximum.",
-  "Принцип измерения скорости:": "Speed measurement principle:",
   "展开高级设置": "Expand advanced settings",
   "未配置上传测试接口。请在系统设置或环境变量中设置 CODEXMANAGER_PROXY_TEST_UPLOAD_URL。": "Upload test endpoint is not configured. Please set CODEXMANAGER_PROXY_TEST_UPLOAD_URL in system settings or environment variables.",
   "Cloudflare-style": "Cloudflare-style",
@@ -1412,15 +1411,6 @@ export const EN_MESSAGES: MessageCatalog = {
   "刷新 AT/RT": "Refresh AT/RT",
   "刷新全部 AT/RT": "Refresh all AT/RT",
   "刷新用量": "Refresh usage",
-  "路由策略": "Routing strategy",
-  "路由来源": "Routing source",
-  "客户端模型": "Client model",
-  "最终平台模型": "Final platform model",
-  "模型来源": "Model source",
-  "客户端推理": "Client reasoning",
-  "最终推理": "Final reasoning",
-  "推理来源": "Reasoning source",
-  "服务等级来源": "Service tier source",
   "选择导出方式；如果已勾选账号，则只导出当前选中项。":
     "Choose the export format. If accounts are selected, only the current selection will be exported.",
   "选择要删除的账号状态；删除后不可恢复。":

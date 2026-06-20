@@ -1511,7 +1511,7 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 									<AccountProxyGeoStatusGrid geo={proxySettings} t={t} />
 								</div>
 							</div>
-							{/* Кнопки тестов в одну линию */}
+							{}
 							<div className="flex gap-2 mt-2">
 								{proxyDialogAccount && (() => {
 									const activeJob = activeJobs[proxyDialogAccount.id];
@@ -1529,7 +1529,7 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 													{t("测试中...")}
 												</>
 											) : (
-												t("Тест задержки")
+												t("延迟测试")
 											)}
 										</Button>
 									);
@@ -1554,7 +1554,7 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 														{t("测试中...")}
 													</>
 												) : (
-													t("Тест скорости")
+													t("速度测试")
 												)}
 											</Button>
 											{isSpeedRunning && activeJob && (
@@ -1564,7 +1564,7 @@ export function AccountsPageView(props: AccountsPageViewProps) {
 													disabled={isCancelling}
 													onClick={() => void cancelAccountSpeedTest(proxyDialogAccount.id, activeJob.jobId)}
 												>
-													{isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : t("Отменить")}
+													{isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : t("取消")}
 												</Button>
 											)}
 										</div>

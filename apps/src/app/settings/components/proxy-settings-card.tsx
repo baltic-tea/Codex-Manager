@@ -1100,7 +1100,7 @@ export function ProxySettingsCard({
                                         onClick={() => setSelectedDetailProfile(profile)}
                                       >
                                         <Activity className="h-4 w-4" />
-                                        {t("Подробная информация")}
+                                        {t("详细信息")}
                                       </DropdownMenuItem>
                                       <DropdownMenuItem
                                         disabled={isActiveJobRunning}
@@ -1188,7 +1188,7 @@ export function ProxySettingsCard({
       >
         <DialogContent className="glass-card max-h-[calc(100vh-2rem)] overflow-hidden p-0 sm:max-w-[600px]">
           <DialogHeader className="px-6 pt-6">
-            <DialogTitle>{t("Подробная информация")}</DialogTitle>
+            <DialogTitle>{t("详细信息")}</DialogTitle>
             <DialogDescription className="flex flex-wrap items-center gap-1.5 mt-1.5 text-muted-foreground break-all text-xs">
               <span className="text-sm font-medium text-foreground">
                 {selectedDetailProfile?.name || "--"}

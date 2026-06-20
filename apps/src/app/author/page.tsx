@@ -128,7 +128,7 @@ function PartnerTable({
             key={item.key}
             item={item}
             onOpenLink={onOpenLink}
-            translate={translate}
+            translate={t}
             emptyVisualLabel={emptyVisualLabel}
           />
         ))}
