@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS proxy_speed_tests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   scope TEXT NOT NULL, -- 'system_proxy' or 'account_proxy'
-  proxy_profile_id TEXT,
-  account_id TEXT,
+  proxy_profile_id TEXT REFERENCES proxy_profiles(id) ON DELETE CASCADE,
+  account_id TEXT REFERENCES accounts(id) ON DELETE CASCADE,
   status TEXT NOT NULL,
   provider TEXT NOT NULL,
   observed_ip TEXT,
@@ -24,8 +24,8 @@ CREATE INDEX IF NOT EXISTS idx_proxy_speed_tests_account ON proxy_speed_tests(ac
 CREATE TABLE IF NOT EXISTS proxy_diagnostics_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   scope TEXT NOT NULL, -- 'system_proxy' or 'account_proxy'
-  proxy_profile_id TEXT,
-  account_id TEXT,
+  proxy_profile_id TEXT REFERENCES proxy_profiles(id) ON DELETE CASCADE,
+  account_id TEXT REFERENCES accounts(id) ON DELETE CASCADE,
   status TEXT NOT NULL,
   provider TEXT NOT NULL,
   file_size_id TEXT NOT NULL,
@@ -41,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_proxy_diagnostics_history_account ON proxy_diagno
 
 CREATE TABLE IF NOT EXISTS account_proxy_url_tests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  account_id TEXT NOT NULL,
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   status TEXT NOT NULL,
   url_latency_ms INTEGER,
   status_code INTEGER,

@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS account_proxy_settings (
   account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
   enabled INTEGER NOT NULL DEFAULT 0,
   proxy_source TEXT,
-  proxy_profile_id TEXT,
+  proxy_profile_id TEXT REFERENCES proxy_profiles(id) ON DELETE SET NULL,
   proxy_url TEXT,
   status TEXT NOT NULL DEFAULT 'unchecked',
   latency_ms INTEGER,

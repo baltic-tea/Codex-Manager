@@ -2786,6 +2786,32 @@ fn storage_can_insert_and_list_proxy_speed_and_diagnostic_history() {
     let storage = Storage::open_in_memory().expect("open in memory");
     storage.init().expect("init schema");
 
+    storage
+        .create_proxy_profile(&ProxyProfileCreateInput {
+            id: "prof-1".to_string(),
+            name: "Test Profile".to_string(),
+            proxy_url: "http://127.0.0.1:8080".to_string(),
+            enabled: true,
+            tags_json: None,
+            notes: None,
+        })
+        .expect("create proxy profile");
+
+    storage
+        .insert_account(&Account {
+            id: "acc-1".to_string(),
+            label: "label".to_string(),
+            issuer: "issuer".to_string(),
+            chatgpt_account_id: None,
+            workspace_id: None,
+            group_name: None,
+            sort: 0,
+            status: "active".to_string(),
+            created_at: 0,
+            updated_at: 0,
+        })
+        .expect("insert account");
+
     // 1. Proxy speed test
     let input_speed = ProxySpeedTestInsertInput {
         scope: "system_proxy".to_string(),
@@ -2855,3 +2881,99 @@ fn storage_can_insert_and_list_proxy_speed_and_diagnostic_history() {
     assert_eq!(list_url[0].id, url_res.id);
 }
 
+#[test]
+fn storage_deletes_proxy_profile_cascades_test_history() {
+    let storage = Storage::open_in_memory().expect("open in memory");
+    storage.init().expect("init schema");
+
+    storage
+        .create_proxy_profile(&ProxyProfileCreateInput {
+            id: "proxy-cascade".to_string(),
+            name: "Cascade Test Profile".to_string(),
+            proxy_url: "http://127.0.0.1:8080".to_string(),
+            enabled: true,
+            tags_json: None,
+            notes: None,
+        })
+        .expect("create proxy profile");
+
+    storage
+        .insert_proxy_profile_url_test(&ProxyProfileUrlTestInsertInput {
+            proxy_profile_id: "proxy-cascade".to_string(),
+            status: "ok".to_string(),
+            url_latency_ms: Some(100),
+            status_code: Some(200),
+            test_url: "http://example.com".to_string(),
+            final_url: None,
+            redirected: false,
+            tested_at: 1000,
+            error_code: None,
+            error: None,
+        })
+        .expect("insert url test");
+
+    storage
+        .insert_proxy_speed_test(&ProxySpeedTestInsertInput {
+            scope: "system_proxy".to_string(),
+            proxy_profile_id: Some("proxy-cascade".to_string()),
+            account_id: None,
+            status: "ok".to_string(),
+            provider: "cloudflare".to_string(),
+            observed_ip: Some("127.0.0.1".to_string()),
+            observed_country: Some("US".to_string()),
+            observed_colo: Some("SFO".to_string()),
+            max_payload_bytes: Some(1000),
+            samples_json: Some("[]".to_string()),
+            download_summary_json: Some("{}".to_string()),
+            upload_summary_json: Some("{}".to_string()),
+            started_at: 1000,
+            finished_at: 1100,
+            error_code: None,
+            error: None,
+        })
+        .expect("insert speed test");
+
+    storage
+        .insert_proxy_diagnostic_test(&ProxyDiagnosticTestInsertInput {
+            scope: "system_proxy".to_string(),
+            proxy_profile_id: Some("proxy-cascade".to_string()),
+            account_id: None,
+            status: "ok".to_string(),
+            provider: "cachefly".to_string(),
+            file_size_id: "size_10mb".to_string(),
+            downloaded_bytes: Some(1000),
+            duration_ms: Some(100),
+            mbps: Some(10.0),
+            tested_at: 1000,
+            error: None,
+        })
+        .expect("insert diagnostic test");
+
+    assert_eq!(
+        storage.list_proxy_profile_url_tests("proxy-cascade", 10).unwrap().len(),
+        1
+    );
+    assert_eq!(
+        storage.list_proxy_speed_tests_by_profile("proxy-cascade", 10).unwrap().len(),
+        1
+    );
+    assert_eq!(
+        storage.list_proxy_diagnostic_tests_by_profile("proxy-cascade", 10).unwrap().len(),
+        1
+    );
+
+    assert!(storage.delete_proxy_profile("proxy-cascade").unwrap());
+
+    assert_eq!(
+        storage.list_proxy_profile_url_tests("proxy-cascade", 10).unwrap().len(),
+        0
+    );
+    assert_eq!(
+        storage.list_proxy_speed_tests_by_profile("proxy-cascade", 10).unwrap().len(),
+        0
+    );
+    assert_eq!(
+        storage.list_proxy_diagnostic_tests_by_profile("proxy-cascade", 10).unwrap().len(),
+        0
+    );
+}

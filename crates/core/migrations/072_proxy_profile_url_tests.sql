@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS proxy_profile_url_tests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  proxy_profile_id TEXT NOT NULL,
+  proxy_profile_id TEXT NOT NULL REFERENCES proxy_profiles(id) ON DELETE CASCADE,
   status TEXT NOT NULL,
   url_latency_ms INTEGER,
   status_code INTEGER,

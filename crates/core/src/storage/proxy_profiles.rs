@@ -258,9 +258,15 @@ impl Storage {
     }
 
     pub fn delete_proxy_profile(&self, id: &str) -> Result<bool> {
+        let normalized_id = id.trim();
         let deleted = self
             .conn
-            .execute("DELETE FROM proxy_profiles WHERE id = ?1", [id.trim()])?;
+            .execute("DELETE FROM proxy_profiles WHERE id = ?1", [normalized_id])?;
+        if deleted > 0 {
+            let _ = self.delete_proxy_profile_url_tests_by_profile(normalized_id);
+            let _ = self.delete_proxy_speed_tests_by_profile(normalized_id);
+            let _ = self.delete_proxy_diagnostic_tests_by_profile(normalized_id);
+        }
         Ok(deleted > 0)
     }
 

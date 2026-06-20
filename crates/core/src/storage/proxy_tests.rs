@@ -670,6 +670,39 @@ impl Storage {
         Ok(items)
     }
 
+    pub fn delete_proxy_profile_url_tests_by_profile(
+        &self,
+        proxy_profile_id: &str,
+    ) -> Result<usize> {
+        let deleted = self.conn.execute(
+            "DELETE FROM proxy_profile_url_tests WHERE proxy_profile_id = ?1",
+            [proxy_profile_id.trim()],
+        )?;
+        Ok(deleted)
+    }
+
+    pub fn delete_proxy_speed_tests_by_profile(
+        &self,
+        proxy_profile_id: &str,
+    ) -> Result<usize> {
+        let deleted = self.conn.execute(
+            "DELETE FROM proxy_speed_tests WHERE proxy_profile_id = ?1",
+            [proxy_profile_id.trim()],
+        )?;
+        Ok(deleted)
+    }
+
+    pub fn delete_proxy_diagnostic_tests_by_profile(
+        &self,
+        proxy_profile_id: &str,
+    ) -> Result<usize> {
+        let deleted = self.conn.execute(
+            "DELETE FROM proxy_diagnostics_history WHERE proxy_profile_id = ?1",
+            [proxy_profile_id.trim()],
+        )?;
+        Ok(deleted)
+    }
+
     pub(super) fn ensure_proxy_history_tables(&self) -> Result<()> {
         self.conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS proxy_speed_tests (
