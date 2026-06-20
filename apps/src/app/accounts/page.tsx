@@ -580,7 +580,7 @@ const toggleCleanupStatus = (rawStatus: string) => {
       await new Promise((resolve) => window.setTimeout(resolve, 750));
       if (trackedJobIdsRef.current[accountId] !== initialJob.jobId) return;
       try {
-        currentJob = await proxyProfilesClient.getProxyTestJob({ jobId: initialJob.jobId });
+        currentJob = await accountClient.getProxyTestJob(accountId, initialJob.jobId);
       } catch (pollError) {
         clearActiveJob(accountId, initialJob.jobId);
         void refreshAccountList();
@@ -601,8 +601,8 @@ const toggleCleanupStatus = (rawStatus: string) => {
       return;
     }
     try {
-      const job = await proxyProfilesClient.testProxyProfileLatency({
-        id: proxyProfileIdDraft,
+      const job = await accountClient.latencyTestProxy({
+        accountId,
       });
       void pollAccountProxyTestJob(accountId, job);
     } catch (error) {
@@ -616,8 +616,8 @@ const toggleCleanupStatus = (rawStatus: string) => {
       return;
     }
     try {
-      const job = await proxyProfilesClient.testProxyProfileCloudflareSpeed({
-        id: proxyProfileIdDraft,
+      const job = await accountClient.cloudflareSpeedTestProxy({
+        accountId,
         config: {
           downloadPreset: "all",
           uploadPreset: "all",
@@ -633,7 +633,7 @@ const toggleCleanupStatus = (rawStatus: string) => {
   const cancelAccountSpeedTest = async (accountId: string, jobId: string) => {
     setIsCancellingJobId(jobId);
     try {
-      await proxyProfilesClient.cancelProxyTestJob({ jobId });
+      await accountClient.cancelProxyTestJob(accountId, jobId);
       toast(t("已请求取消测试"));
     } catch (error) {
       toast.error(`${t("取消测试失败")}: ${error instanceof Error ? error.message : String(error)}`);

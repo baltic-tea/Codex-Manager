@@ -23,6 +23,7 @@ export function createAccountWebCommands(postWebRpc: WebRpcCaller): Record<strin
     service_account_proxy_test: { rpcMethod: "account/proxy/test" },
     service_account_proxy_latency_test: { rpcMethod: "account/proxy/latency-test" },
     service_account_proxy_speed_test: { rpcMethod: "account/proxy/speed-test" },
+    service_account_proxy_cloudflare_speed_test: { rpcMethod: "account/proxy/cloudflare-speed-test" },
     service_account_proxy_test_job: { rpcMethod: "account/proxy/test-job" },
     service_account_proxy_cancel_test: { rpcMethod: "account/proxy/cancel-test" },
     service_account_proxy_speed_test_history: { rpcMethod: "account/proxy/speed-test-history" },

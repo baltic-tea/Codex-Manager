@@ -9,6 +9,7 @@ export function createProxyProfilesWebCommands(): Record<string, WebCommandDescr
     service_system_proxy_delete: { rpcMethod: "system/proxy/delete" },
     service_system_proxy_test_latency: { rpcMethod: "system/proxy/test-latency" },
     service_system_proxy_speed_test: { rpcMethod: "system/proxy/speed-test" },
+    service_system_proxy_cloudflare_speed_test: { rpcMethod: "system/proxy/cloudflare-speed-test" },
     service_system_proxy_test_job: { rpcMethod: "system/proxy/test-job" },
     service_system_proxy_cancel_test: { rpcMethod: "system/proxy/cancel-test" },
     service_system_proxy_speed_test_history: { rpcMethod: "system/proxy/speed-test-history" },

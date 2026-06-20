@@ -179,6 +179,15 @@ test("createWebCommandMap 为 system proxy profiles 提供 Web RPC 映射", () =
   assert.deepEqual(commandMap.service_system_proxy_cancel_test, {
     rpcMethod: "system/proxy/cancel-test",
   });
+  assert.deepEqual(commandMap.service_system_proxy_cloudflare_speed_test, {
+    rpcMethod: "system/proxy/cloudflare-speed-test",
+  });
+});
+
+test("createWebCommandMap 为 account proxy cloudflare speed test 提供 Web RPC 映射", () => {
+  assert.deepEqual(commandMap.service_account_proxy_cloudflare_speed_test, {
+    rpcMethod: "account/proxy/cloudflare-speed-test",
+  });
 });
 
 test("createWebCommandMap 为显示主窗口提供 Web 回退", async () => {
