@@ -468,7 +468,13 @@ fn upstream_client_for_account_fails_closed_for_invalid_profile_binding() {
     let _pool_guard = EnvGuard::set(ENV_PROXY_LIST, "http://127.0.0.1:7003");
 
     seed_account(db.path(), "acc-missing-profile");
+    seed_proxy_profile(db.path(), "pp-missing", true, "http://127.0.0.1:7010");
     seed_account_proxy_profile_binding(db.path(), "acc-missing-profile", "pp-missing", None);
+    // Delete the proxy profile to trigger ON DELETE SET NULL on the reference, simulating a missing/deleted profile
+    {
+        let storage = open_test_storage(db.path());
+        storage.delete_proxy_profile("pp-missing").unwrap();
+    }
 
     seed_account(db.path(), "acc-disabled-profile");
     seed_proxy_profile(db.path(), "pp-disabled", false, "http://127.0.0.1:7012");
